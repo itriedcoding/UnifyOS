@@ -161,9 +161,18 @@ if [ "$EFI_BUILT" -ne 1 ]; then
     exit 1
 fi
 
-"$GRUB_MKIMAGE" -O i386-pc -d "$GRUB_LIB/i386-pc" -o "$WORK/core.img" \
-    -p /boot/grub $GRUB_MODULES
+# The BIOS image must target El Torito and carry its own search/config: a
+# plain i386-pc core image has no usable root here and drops to the grub>
+# prompt instead of loading the menu. Long lines are intentional: no
+# continuation characters to get lost in transport.
+BIOS_TARGET=i386-pc-eltorito
+if ! "$GRUB_MKSTANDALONE" -O "$BIOS_TARGET" --directory="$GRUB_LIB/i386-pc" --locales="" --fonts="" --output="$WORK/core.img" --modules="$GRUB_MODULES" "boot/grub/grub.cfg=$WORK/embed.cfg" 2>/dev/null; then
+    BIOS_TARGET=i386-pc
+    "$GRUB_MKSTANDALONE" -O "$BIOS_TARGET" --directory="$GRUB_LIB/i386-pc" --locales="" --fonts="" --output="$WORK/core.img" --modules="$GRUB_MODULES" "boot/grub/grub.cfg=$WORK/embed.cfg"
+fi
+echo "      BIOS core image built for $BIOS_TARGET"
 cat "$GRUB_LIB/i386-pc/cdboot.img" "$WORK/core.img" > "$WORK/isodir/boot/grub/eltorito.img"
+
 
 # Small FAT image that carries the UEFI loader; used as the El Torito EFI entry
 # and as the hybrid GPT partition so the ISO also boots when dd'ed to a stick.
