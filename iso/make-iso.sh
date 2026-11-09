@@ -144,11 +144,18 @@ configfile (\$root)/boot/grub/grub.cfg
 EOF
 
 GRUB_MODULES="part_gpt part_msdos iso9660 fat normal search search_label configfile all_video gfxterm font echo test linux"
-"$GRUB_MKSTANDALONE" -O x86_64-efi --directory="$GRUB_LIB/x86_64-efi" \
-    --locales="" --fonts="" \
-    --output="$WORK/isodir/EFI/BOOT/BOOTX64.EFI" \
-    --modules="$GRUB_MODULES" \
-    "boot/grub/grub.cfg=$WORK/embed.cfg"
+EFI_BUILT=0
+for grub_directory in "$GRUB_LIB/x86_64-efi" "$GRUB_LIB"; do
+    [ -d "$grub_directory" ] || continue
+    if "$GRUB_MKSTANDALONE" -O x86_64-efi --directory="$grub_directory"         --locales="" --fonts=""         --output="$WORK/isodir/EFI/BOOT/BOOTX64.EFI"         --modules="$GRUB_MODULES"         "boot/grub/grub.cfg=$WORK/embed.cfg"; then
+        EFI_BUILT=1
+        break
+    fi
+done
+if [ "$EFI_BUILT" -ne 1 ]; then
+    echo "error: grub-mkstandalone failed (no usable module directory under $GRUB_LIB)" >&2
+    exit 1
+fi
 
 "$GRUB_MKIMAGE" -O i386-pc -d "$GRUB_LIB/i386-pc" -o "$WORK/core.img" \
     -p /boot/grub $GRUB_MODULES
@@ -189,3 +196,4 @@ echo
 echo "Built $OUTPUT"
 ls -lh "$OUTPUT"
 cat "$OUTPUT.sha256"
+
