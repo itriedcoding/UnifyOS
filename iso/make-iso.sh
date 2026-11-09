@@ -161,27 +161,21 @@ if [ "$EFI_BUILT" -ne 1 ]; then
     exit 1
 fi
 
-# BIOS core image: El Torito target, a minimal memdisk carrying only the
-# search config, and the module directory on the ISO for runtime loading.
-# grub-mkstandalone cannot be used here: it packs every module into the core,
-# which overflows the 0x78000 byte El Torito limit.
+# BIOS boot image. The eltorito target of grub-mkimage already contains
+# cdboot.img, so its output IS the El Torito image; concatenating cdboot onto
+# it again produces an image the BIOS jumps into and hangs on. The plain
+# i386-pc fallback does need cdboot prepended. Modules beyond this set load
+# from /boot/grub/i386-pc on the ISO at runtime.
 BIOS_MODULES="biosdisk part_msdos iso9660 normal search search_label configfile linux"
-mkdir -p "$WORK/memdisk/boot/grub"
-cp "$WORK/embed.cfg" "$WORK/memdisk/boot/grub/grub.cfg"
-( cd "$WORK/memdisk" && tar -cf "$WORK/memdisk.tar" . )
 cp -a "$GRUB_LIB/i386-pc" "$WORK/isodir/boot/grub/i386-pc"
-BIOS_OK=0
-for target in i386-pc-eltorito i386-pc; do
-    if "$GRUB_MKIMAGE" -O "$target" -m "$WORK/memdisk.tar" -d "$GRUB_LIB/i386-pc" -p /boot/grub -o "$WORK/core.img" $BIOS_MODULES; then
-        BIOS_TARGET="$target"; BIOS_OK=1; break
-    fi
-done
-if [ "$BIOS_OK" -ne 1 ]; then
-    echo "error: grub-mkimage could not build a BIOS core image under the limit" >&2
-    exit 1
+if "$GRUB_MKIMAGE" -O i386-pc-eltorito -d "$GRUB_LIB/i386-pc" -p /boot/grub -o "$WORK/isodir/boot/grub/eltorito.img" $BIOS_MODULES; then
+    echo "      BIOS boot image: i386-pc-eltorito, $(wc -c < "$WORK/isodir/boot/grub/eltorito.img") bytes"
+else
+    "$GRUB_MKIMAGE" -O i386-pc -d "$GRUB_LIB/i386-pc" -p /boot/grub -o "$WORK/core.img" $BIOS_MODULES
+    cat "$GRUB_LIB/i386-pc/cdboot.img" "$WORK/core.img" > "$WORK/isodir/boot/grub/eltorito.img"
+    echo "      BIOS boot image: i386-pc + cdboot, $(wc -c < "$WORK/isodir/boot/grub/eltorito.img") bytes"
 fi
-echo "      BIOS core image: $BIOS_TARGET, $(wc -c < "$WORK/core.img") bytes"
-cat "$GRUB_LIB/i386-pc/cdboot.img" "$WORK/core.img" > "$WORK/isodir/boot/grub/eltorito.img"
+
 
 
 

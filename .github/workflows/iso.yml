@@ -78,6 +78,16 @@ jobs:
           echo "testing $ISO"
           ./scripts/qemu-boot-test.sh "$ISO"
 
+      - name: Keep the boot logs
+        # Serial consoles of both firmware cases, so a failed boot can be
+        # diagnosed from the run itself instead of being re-run blind.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: boottest-logs
+          path: build/boottest/
+          if-no-files-found: ignore
+
       - name: Upload image
         uses: actions/upload-artifact@v4
         with:
