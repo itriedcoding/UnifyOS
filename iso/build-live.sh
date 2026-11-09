@@ -168,8 +168,13 @@ done
 install -m755 "$ROOT/iso/live/init" "$IR/init"
 
 if [ -d "$MODDIR" ]; then
+    # isofs alone is not enough: without the CD-ROM and block drivers the live
+    # init has no /dev/sr0 (or USB disk) to mount, and the boot fails with "no
+    # live medium found". Seed the closure with every medium the init probes.
     python3 "$ROOT/scripts/module-closure.py" --modules-dir "$MODDIR" \
-        squashfs isofs loop > "$WORK/modules.list"
+        squashfs isofs loop overlay \
+        sr_mod cdrom sd_mod ahci virtio_blk virtio_pci \
+        usb-storage uas xhci_pci > "$WORK/modules.list"
     : > "$IR/modules.load"
     while IFS= read -r relative; do
         [ -n "$relative" ] || continue
