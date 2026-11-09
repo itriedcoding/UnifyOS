@@ -6,10 +6,11 @@
 #
 # Runs under busybox ash; keep to POSIX sh and busybox applets only.
 #
-# This process is PID 1, so it must never return. When init exits, the kernel
-# panics with "Attempted to kill init"; a Hyper-V virtual machine showed exactly
-# that at 0.48 s because its CD-ROM controller had no driver in the initramfs,
-# the medium was never found, and the rescue shell exited on end of input.
+# This process is PID 1, so the paths before the handover must never return.
+# When init exits, the kernel panics with "Attempted to kill init"; a Hyper-V
+# virtual machine showed exactly that at 0.48 s because its CD-ROM controller
+# had no driver in the initramfs, the medium was never found, and the rescue
+# shell exited on end of input.
 
 export PATH=/bin:/sbin:/usr/bin:/usr/sbin
 
@@ -50,7 +51,8 @@ mkdir -p /media /root /newroot
 
 # Modules are copied in at build time and listed in /modules.load, ordered so
 # that dependencies come first. Nodes for the devices they register appear
-# through devtmpfs without further help.
+# through devtmpfs without further help. Hyper-V modules fail to load on
+# hardware without Hyper-V, which is reported and ignored.
 if [ -f /modules.load ]; then
     while read -r module; do
         [ -n "$module" ] || continue
@@ -88,8 +90,8 @@ mount -t squashfs -o ro,loop /media/live/filesystem.squashfs /root \
 
 [ -x /root/sbin/init ] || fail "live filesystem has no /sbin/init"
 
-# switch_root runs in a subshell so a failure returns here instead of ending
-# PID 1. On success it does not return at all.
-( exec switch_root /root /sbin/init ) || fail "switch_root to the live filesystem failed"
-
-fail "live init reached the end of the boot sequence"
+# switch_root has to replace this process: it refuses to run forked or from a
+# subshell ("PID must be 1"), so it is exec'd directly. Everything it needs is
+# checked above, because once it is exec'd a failure ends PID 1.
+echo "unify-live: handing over to the live system"
+exec switch_root -c /dev/console /root /sbin/init
