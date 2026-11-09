@@ -90,8 +90,13 @@ if ! id unify >/dev/null 2>&1; then
     else
         useradd -m -s /bin/bash unify
     fi
-    passwd -d unify >/dev/null 2>&1 || true
 fi
+
+# A documented password instead of an empty one: the live console is already
+# root, so this account is what a login prompt or an installed system uses.
+# README.md states the credentials.
+echo 'unify:unify' | chpasswd
+passwd -l root >/dev/null 2>&1 || true
 
 echo "[unify] firewall defaults: deny inbound, allow outbound"
 ufw --force default deny incoming >/dev/null 2>&1 || true

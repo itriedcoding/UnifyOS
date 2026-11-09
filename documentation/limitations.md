@@ -6,7 +6,8 @@ with every change; treat anything not listed as verified as untested.
 ## Verified in this environment
 
 The build container is an unprivileged Linux sandbox (no `root`, no
-`CAP_SYS_ADMIN`, no `/dev/kvm`, no QEMU, 2 vCPUs, ~4 GB RAM).
+`CAP_SYS_ADMIN`, no `/dev/kvm`, no QEMU, 2 vCPUs, ~4 GB RAM). Everything that
+needs root or an emulator runs on the CI runner instead.
 
 Verified by running the code:
 
@@ -18,22 +19,31 @@ Verified by running the code:
   disk-safety refusals and the complete dry-run command sequence.
 * **Application suite** — all ten GTK4 programs compile against GTK4 4.8 with
   `-Wall -Wextra` and produce zero warnings.
-* **Live ISO** - CI builds a 292 MiB hybrid image on `ubuntu-24.04`; `xorriso`
-  reports both El Torito entries (BIOS `eltorito.img`, UEFI `efi.img`), the
-  squashfs is 266 MB with `-all-root` ownership normalisation, and a SHA256
-  checksum is written next to the image.
-* **The minimal ISO boots.** `scripts/qemu-boot-test.sh` booted
-  `UnifyOS-0.1.0-minimal-amd64.iso` under SeaBIOS and under OVMF; both cases
-  reached the live session, printing `unify-live: live medium found` and
-  `Live session ready` on the serial console. That build is published at
-  https://github.com/itriedcoding/UnifyOS/releases/tag/v0.1.0.
+* **Live init cannot exit.** `scripts/test-live-init.sh` runs the real
+  `iso/live/init` in a private mount namespace with no live medium and requires
+  it to still be running after 8 seconds, so PID 1 survives the failure path
+  that panicked a virtual machine.
+* **Live ISO** — CI builds a hybrid image on `ubuntu-24.04`; `xorriso` reports
+  both El Torito entries (BIOS `eltorito.img`, UEFI `efi.img`), the squashfs is
+  written with `-all-root` ownership normalisation, and a SHA256 checksum is
+  written next to the image.
+* **The minimal ISO boots.** `scripts/qemu-boot-test.sh` boots
+  `UnifyOS-0.1.1-minimal-amd64.iso` three times — SeaBIOS, OVMF and a
+  virtio-scsi CD — and each case must print `unify-live: live medium found` and
+  `Live session ready` on the serial console with no kernel panic in the log.
+  The v0.1.0 image passed the first two; v0.1.1 adds the third.
 
 ## Not verified
 
+* **The Hyper-V fix has not been booted on Hyper-V.** QEMU cannot emulate the
+  synthetic SCSI controller, so v0.1.1 ships `hv_vmbus`/`hv_storvsc`, waits for
+  the device node and proves the init survives a missing medium — but the
+  reported machine itself has not been retested. Confirm with the release image
+  and report the rescue shell's block-device list if it still fails.
 * **Only the minimal console image is boot-tested.** The boot test proves GRUB,
   initramfs module loading, squashfs `switch_root` and busybox init reach a
-  session on both firmwares. It does not exercise a desktop session, hardware
-  beyond the emulated QEMU devices, or booting from a USB stick.
+  session on three emulated transports. It does not exercise a desktop session,
+  hardware beyond the emulated devices, or booting from a USB stick.
 * **No application has been launched.** GTK4 applications need a display
   server; this container has none. Compilation proves the code is well formed
   and links against GTK4, not that the windows behave correctly.
@@ -48,6 +58,9 @@ Verified by running the code:
   block device. Its plan generation, safety refusals and command sequence are
   unit-tested and dry-run verified; partitioning, formatting and GRUB
   installation are not.
+* **Credentials are public by design.** `unify` / `unify` is documented in
+  `README.md` and readable from the ISO by anyone. Direct root login is locked;
+  change the password with `passwd` on any installed system.
 * **No graphical login screen.** The desktop session is autologin on tty1 with
   `swaylock` for locking.
 * **No signed package repository.** `packages/` was scoped but not built.
@@ -58,10 +71,13 @@ Verified by running the code:
 
 ## Known technical limitations
 
-* The minimal image's kernel modules are hard-linked from the Debian kernel
-  package; because `depmod` cannot run without root, the live root filesystem
-  has no `modules.dep`, so `modprobe` by name will not work inside it. The
-  initramfs carries an explicit, dependency-ordered module list instead.
+* The live root has no module index: `depmod` cannot write to a read-only
+  squashfs. The initramfs therefore carries a dependency-ordered module list,
+  and the running system loads its remaining drivers by absolute path from
+  `/etc/unify/live-modules.load` instead of by module name.
+* The live image uses busybox init, not systemd. The Debian packages installed
+  into the root filesystem are configured for systemd, and their units are
+  present, but a live session does not start them; only `rcS` runs.
 * `applications/build.sh` links with `-Wl,--allow-shlib-undefined` because the
   extracted GTK4 sysroot has no linker scripts for cairo's private
   dependencies. Symbols resolve at run time against the same libraries; this is
@@ -72,11 +88,13 @@ Verified by running the code:
 
 ## Boot testing
 
-`scripts/qemu-boot-test.sh` boots an image under SeaBIOS and OVMF and exits
-non-zero unless the serial console reaches the live session. CI runs it on every
-tag and every manual build, and the v0.1.0 image passed both cases. Both serial
-logs are kept as the `boottest-logs` artifact, so a failure names the missing
-marker and prints the tail of the console.
+`scripts/qemu-boot-test.sh` boots an image under SeaBIOS, under OVMF and from a
+virtio-scsi CD, and exits non-zero unless the serial console reaches the live
+session and stays free of `Kernel panic` / `Attempted to kill init`. CI runs it
+on every tag and every manual build. All serial logs are kept as the
+`boottest-logs` artifact, so a failure names the missing marker and prints the
+tail of the console. `scripts/test-live-init.sh` runs earlier in the same job and
+covers the case where no medium is found at all.
 
 ## Known portability requirements
 
@@ -88,8 +106,10 @@ marker and prints the tail of the console.
 
 ## Next steps, in order
 
-1. Build the desktop root filesystem on a privileged host, integrate the GTK4
+1. Reboot the reported Hyper-V generation-2 machine from the v0.1.1 image and
+   confirm the live session.
+2. Build the desktop root filesystem on a privileged host, integrate the GTK4
    applications and their runtime libraries, and boot the desktop image.
-2. Run the graphical installer against a spare disk and boot the result.
-3. Measure idle memory, installed size and boot time on documented hardware.
-4. Boot the published image on real hardware and from a USB stick.
+3. Run the graphical installer against a spare disk and boot the result.
+4. Measure idle memory, installed size and boot time on documented hardware.
+5. Boot the published image on real hardware and from a USB stick.

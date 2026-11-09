@@ -3,6 +3,46 @@
 All notable changes to UnifyOS. The `VERSION` file is the single source of
 truth for the distribution version.
 
+## [0.1.1] — 2026-11-09
+
+Fixes the boot failure reported from a Hyper-V virtual machine and documents the
+session accounts.
+
+### Fixed
+
+* **Kernel panic `Attempted to kill init` on Hyper-V generation-2 machines.**
+  Two defects combined:
+  * The initramfs carried no drivers for the Hyper-V synthetic SCSI controller,
+    so the DVD never appeared as `/dev/sr0` and the live medium was never found.
+    It now ships `hv_vmbus`, `hv_storvsc`, `hyperv_keyboard` and `hid_hyperv`,
+    and waits up to 15 seconds for block devices to appear, because storage
+    drivers probe asynchronously on several buses.
+  * The no-medium path ended in `exec /bin/sh`. When that shell received end of
+    input it exited 0, and PID 1 exiting panics the kernel at 0.48 s with the
+    exact message from the report. `iso/live/init` now restarts the rescue shell
+    in a loop, creates `/dev/console` itself when devtmpfs did not, prints the
+    visible block devices and the tail of `dmesg`, and cannot return at all.
+* **Live-root drivers.** `rcS` loads input, network and virtualisation drivers
+  by path from `/etc/unify/live-modules.load` (Hyper-V keyboard and network,
+  virtio, USB HID/storage, common wired NICs), since a read-only squashfs has no
+  module index and `depmod` cannot run inside it.
+* **Stale GRUB title.** The minimal menu entry hard-coded `0.1.0`; the version is
+  now only in `/etc/os-release` and `.disk/info`.
+
+### Added
+
+* `scripts/test-live-init.sh` — runs the real `iso/live/init` in a mount
+  namespace with no live medium and fails unless it is still running when the
+  timeout fires. Wired into CI before the image build.
+* `scripts/qemu-boot-test.sh` — the boot test now also fails on `Kernel panic`
+  / `Attempted to kill init` even when the session markers appear, and boots the
+  image a third time from a virtio-scsi CD to exercise a non-AHCI transport.
+
+### Changed
+
+* **Documented credentials.** `unify` / `unify` with `sudo`; direct root login is
+  locked and the live console is already a root shell (see `README.md`).
+
 ## [0.1.0] — 2026-11-09
 
 Foundation release with a GTK4 application suite and a bootable-image pipeline.
@@ -54,15 +94,14 @@ Foundation release with a GTK4 application suite and a bootable-image pipeline.
 
 ### Artifacts
 
-* `UnifyOS-0.1.0-minimal-amd64.iso` - 292 MiB hybrid BIOS+UEFI live image,
+* `UnifyOS-0.1.0-minimal-amd64.iso` — 292 MiB hybrid BIOS+UEFI live image,
   published at https://github.com/itriedcoding/UnifyOS/releases/tag/v0.1.0
   with SHA256
   `be72b9970380826fed72befb4dcbccece0004708a1076e0981ccdf1a41d67797`.
   Boot-tested by the CI that built it: both SeaBIOS and OVMF reached the live
-  session before the release step ran.
+  session before the release step ran. It did not boot on Hyper-V; see 0.1.1.
 
 ### Not included
 
 * Desktop root filesystem and desktop ISO (needs a privileged host).
-* Boot testing of any image.
 * Graphical login screen, signed package repository, performance measurements.

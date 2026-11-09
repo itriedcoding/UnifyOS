@@ -5,19 +5,44 @@
 # to the real init inside the live root with switch_root.
 #
 # Runs under busybox ash; keep to POSIX sh and busybox applets only.
+#
+# This process is PID 1, so it must never return. When init exits, the kernel
+# panics with "Attempted to kill init"; a Hyper-V virtual machine showed exactly
+# that at 0.48 s because its CD-ROM controller had no driver in the initramfs,
+# the medium was never found, and the rescue shell exited on end of input.
 
 export PATH=/bin:/sbin:/usr/bin:/usr/sbin
+
+MEDIUM=""
+
+# Restart the shell instead of exec'ing it: exec is what let PID 1 end.
+rescue_shell() {
+    while :; do
+        if [ -x /bin/cttyhack ]; then
+            setsid cttyhack /bin/sh -i </dev/console >/dev/console 2>&1 || true
+        else
+            /bin/sh -i </dev/console >/dev/console 2>&1 || true
+        fi
+        echo "unify-live: rescue shell exited; restarting it in 5 seconds."
+        sleep 5
+    done
+}
 
 fail() {
     echo
     echo "unify-live: $*"
-    echo "Dropping to a rescue shell. The medium is mounted at /media when possible."
-    exec /bin/sh
+    echo "unify-live: kernel $(uname -r); block devices visible to this initramfs:"
+    ls -l /dev/sr* /dev/sd* /dev/vd* /dev/nvme* /dev/mmcblk* 2>/dev/null | sed 's/^/  /'
+    echo "unify-live: last kernel messages:"
+    dmesg 2>/dev/null | tail -n 20 | sed 's/^/  /'
+    echo "unify-live: dropping to a rescue shell; power off with 'poweroff -f'."
+    rescue_shell
 }
 
 mount -t proc proc /proc || fail "cannot mount /proc"
 mount -t sysfs sysfs /sys || fail "cannot mount /sys"
-mount -t devtmpfs devtmpfs /dev 2>/dev/null || mdev -s
+mount -t devtmpfs devtmpfs /dev 2>/dev/null || mdev -s 2>/dev/null || true
+[ -c /dev/console ] || mknod /dev/console c 5 1 2>/dev/null || true
 
 mkdir -p /media /root /newroot
 
@@ -26,28 +51,43 @@ mkdir -p /media /root /newroot
 if [ -f /modules.load ]; then
     while read -r module; do
         [ -n "$module" ] || continue
-        insmod "/$module" 2>/dev/null
+        insmod "/$module" 2>/dev/null || echo "unify-live: module did not load: $module"
     done < /modules.load
+    mdev -s 2>/dev/null || true
 fi
 
-# The medium can be a CD/DVD (sr0) or any USB/virtio disk carrying the image.
-for device in /dev/sr0 /dev/cdrom /dev/vda /dev/sda /dev/sdb /dev/nvme0n1 /dev/mmcblk0; do
-    [ -b "$device" ] || continue
-    if mount -o ro "$device" /media 2>/dev/null; then
+# Any optical or disk device can carry the image: IDE/SATA (sr0), the Hyper-V
+# synthetic SCSI controller, virtio, NVMe and USB all appear as block nodes.
+try_mount() {
+    for device in /dev/cdrom /dev/sr* /dev/sd* /dev/vd* /dev/nvme* /dev/mmcblk*; do
+        [ -b "$device" ] || continue
+        mount -o ro "$device" /media 2>/dev/null || continue
         if [ -f /media/live/filesystem.squashfs ]; then
+            MEDIUM="$device"
             echo "unify-live: live medium found on $device"
-            break
+            return 0
         fi
-        umount /media 2>/dev/null
-    fi
+        umount /media 2>/dev/null || true
+    done
+    return 1
+}
+
+# Storage drivers probe asynchronously on several buses, so wait for the node
+# instead of assuming it already exists on the first pass.
+waited=0
+while ! try_mount; do
+    [ "$waited" -lt 15 ] || fail "no live medium with live/filesystem.squashfs found after ${waited}s"
+    sleep 1
+    waited=$((waited + 1))
 done
 
-[ -f /media/live/filesystem.squashfs ] || fail "no live medium with live/filesystem.squashfs found"
-
 mount -t squashfs -o ro,loop /media/live/filesystem.squashfs /root \
-    || fail "cannot mount the live filesystem"
+    || fail "cannot mount the live filesystem from $MEDIUM"
 
 [ -x /root/sbin/init ] || fail "live filesystem has no /sbin/init"
 
-# busybox switch_root moves /proc, /sys and /dev into the new root for us.
-exec switch_root /root /sbin/init
+# switch_root runs in a subshell so a failure returns here instead of ending
+# PID 1. On success it does not return at all.
+( exec switch_root /root /sbin/init ) || fail "switch_root to the live filesystem failed"
+
+fail "live init reached the end of the boot sequence"

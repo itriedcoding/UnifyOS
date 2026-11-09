@@ -1,15 +1,21 @@
 #!/usr/bin/env bash
-# Boot-test the UnifyOS ISO under both firmware types.
+# Boot-test the UnifyOS ISO under both firmware types and two CD transports.
 #
 # Run this on a Linux host with QEMU, SeaBIOS and OVMF installed:
 #
-#   sudo apt install qemu-system-x86 ovmf seabios
-#   ./scripts/qemu-boot-test.sh out/UnifyOS-0.1.0-minimal-amd64.iso
+#   apt install qemu-system-x86 ovmf seabios
+#   ./scripts/qemu-boot-test.sh out/UnifyOS-0.1.1-minimal-amd64.iso
 #
 # Each case boots the image headless, captures the serial console to a log in
 # build/boottest/, and checks for the markers the live init prints. A missing
 # marker is a failure: the script exits non-zero and prints the log tail, so it
 # can gate CI instead of being advisory.
+#
+# The virtio-scsi case exists because the first boot failures were missing
+# storage drivers, not bad GRUB configuration: a machine whose medium hangs off
+# a different controller than the one under test boots into a rescue shell. The
+# Hyper-V synthetic SCSI controller cannot be emulated by QEMU, so its drivers
+# are covered by the module closure and by the init's no-medium test instead.
 #
 # Environment: QEMU, QEMU_MEMORY (default 1024), BOOT_TIMEOUT (default 240),
 # OVMF_CODE, OVMF_VARS.
@@ -64,6 +70,13 @@ check_log() {
             missing=1
         fi
     done
+    # A panic still lets the boot reach nothing, but it can also follow a
+    # successful marker, so it is checked on its own.
+    if grep -qF -- "Attempted to kill init" "$log" \
+        || grep -qF -- "Kernel panic" "$log"; then
+        echo "  PANIC: the kernel panicked during boot"
+        missing=1
+    fi
     if [ "$missing" -ne 0 ]; then
         echo "  --- last 40 lines of $log ---"
         tail -40 "$log" | sed 's/^/  | /'
@@ -106,9 +119,23 @@ boot_uefi() {
     check_log uefi "$log"
 }
 
+boot_scsi() {
+    local log="$LOGDIR/scsi.log"
+    echo "[scsi] booting $ISO from a virtio-scsi CD-ROM"
+    timeout "$TIMEOUT" "$QEMU" \
+        -machine q35 -m "$MEMORY" ${ACCEL} \
+        -drive if=none,id=cd0,file="$ISO",media=cdrom,readonly=on \
+        -device virtio-scsi-pci,id=scsi0 \
+        -device scsi-cd,drive=cd0,bus=scsi0.0 \
+        -boot d -no-reboot -nographic -monitor none \
+        -serial "file:$log" >/dev/null 2>&1 || true
+    check_log scsi "$log"
+}
+
 echo "UnifyOS boot test: $ISO"
 boot_bios || true
 boot_uefi || true
+boot_scsi || true
 
 echo
 if [ "$failures" -ne 0 ]; then
@@ -116,4 +143,4 @@ if [ "$failures" -ne 0 ]; then
     echo "logs: $LOGDIR"
     exit 1
 fi
-echo "Both firmware types booted to the live session."
+echo "All cases booted to the live session."

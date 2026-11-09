@@ -20,6 +20,16 @@ hostname unify 2>/dev/null
 # Loopback so local IPC services work; ignore failures on machines without it.
 ip link set lo up 2>/dev/null
 
+# The initramfs carries only what is needed to find and mount the medium. The
+# rest - input, network and virtualisation drivers - is loaded here by path,
+# because a read-only squashfs has no module index and depmod cannot run.
+if [ -f /etc/unify/live-modules.load ]; then
+    while read -r module; do
+        [ -n "$module" ] || continue
+        insmod "$module" 2>/dev/null || true
+    done < /etc/unify/live-modules.load
+fi
+
 # Unify system binaries live in /usr/bin; give them a writable state directory.
 mkdir -p /run/unify
 if [ -x /usr/bin/unify-sysmond ]; then
@@ -29,4 +39,5 @@ fi
 clear 2>/dev/null
 cat /etc/unify-release 2>/dev/null || echo "UnifyOS live"
 echo
-echo "Live session ready. Log in as root (no password) for a shell."
+echo "Live session ready. This console is a root shell; no login is required."
+echo "Accounts: unify / unify (sudo -i for root). Root login is locked."

@@ -1,9 +1,9 @@
 name: ISO build and boot test
 
-# Builds the minimal live image on a Linux runner, boots it under both BIOS and
-# UEFI firmware in QEMU, and only then publishes it. A tag push creates a
-# GitHub release with the image and its checksum; a manual run keeps the image
-# as a workflow artifact.
+# Builds the minimal live image on a Linux runner, tests the live init, boots the
+# image under both BIOS and UEFI firmware plus a second CD transport in QEMU, and
+# only then publishes it. A tag push creates a GitHub release with the image and
+# its checksum; a manual run keeps the image as a workflow artifact.
 
 on:
   push:
@@ -42,11 +42,11 @@ jobs:
           set -euo pipefail
           pool=https://deb.debian.org/debian/pool/main/d/debian-archive-keyring
           listing="$(curl -fsSL "$pool/")"
-          # The [^"] classes keep each match inside one quoted filename.
+          # The [^\"] classes keep each match inside one quoted filename.
           pick() { printf '%s' "$listing" | grep -oE "$1" | sort -V | tail -1; }
-          file="$(pick 'debian-archive-keyring_[0-9][^"]*deb12u[0-9]+_all[.]deb' || true)"
+          file="$(pick 'debian-archive-keyring_[0-9][^\"]*deb12u[0-9]+_all[.]deb' || true)"
           if [ -z "$file" ]; then
-            file="$(pick 'debian-archive-keyring_[0-9][^"]*_all[.]deb' || true)"
+            file="$(pick 'debian-archive-keyring_[0-9][^\"]*_all[.]deb' || true)"
           fi
           [ -n "$file" ] || { echo "error: no keyring package in pool listing" >&2; exit 1; }
           echo "using $file"
@@ -54,6 +54,11 @@ jobs:
           dpkg-deb -x /tmp/debian-archive-keyring.deb /tmp/debian-keyring
           test -r /tmp/debian-keyring/usr/share/keyrings/debian-archive-keyring.gpg
           echo "KEYRING=/tmp/debian-keyring/usr/share/keyrings/debian-archive-keyring.gpg" >> "$GITHUB_ENV"
+
+      - name: Test that the live init cannot exit as PID 1
+        # A VM that panicked with "Attempted to kill init" is what prompted this
+        # test: the init has to survive a boot where no medium is found.
+        run: sudo bash ./scripts/test-live-init.sh
 
       - name: Bootstrap the minimal root filesystem
         run: |
@@ -72,15 +77,15 @@ jobs:
           BUSYBOX="$(command -v busybox)" \
             ./iso/build-live.sh
 
-      - name: Boot test under BIOS and UEFI
+      - name: Boot test under BIOS, UEFI and virtio-scsi
         run: |
           ISO="$(ls out/*-minimal-amd64.iso | head -1)"
           echo "testing $ISO"
           ./scripts/qemu-boot-test.sh "$ISO"
 
       - name: Keep the boot logs
-        # Serial consoles of both firmware cases, so a failed boot can be
-        # diagnosed from the run itself instead of being re-run blind.
+        # Serial consoles of every firmware and transport case, so a failed boot
+        # can be diagnosed from the run itself instead of being re-run blind.
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -105,4 +110,4 @@ jobs:
           gh release create "${GITHUB_REF_NAME}" \
             out/*.iso out/*.sha256 \
             --title "UnifyOS ${GITHUB_REF_NAME#v}" \
-            --notes "Minimal live image. Booted under BIOS and UEFI in CI before publication."
+            --notes "Minimal live console image. Booted under BIOS, UEFI and virtio-scsi in CI before publication."

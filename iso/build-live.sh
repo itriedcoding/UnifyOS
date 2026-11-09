@@ -28,6 +28,32 @@ SQUASH_LEVEL="${SQUASH_LEVEL:-3}"
 OUT="${OUT:-$ROOT/out/UnifyOS-$VERSION-$EDITION-amd64.iso}"
 WORK="$ROOT/build/live-$EDITION"
 
+# Modules the initramfs needs before the medium can be mounted. The closure
+# resolves dependencies, so only the leaves are listed. Storage coverage is
+# deliberately wider than the test bed: the Hyper-V synthetic SCSI controller
+# (hv_vmbus + hv_storvsc) is what a Hyper-V generation-2 machine uses for its
+# DVD, and without those drivers /dev/sr0 never appears.
+INITRAMFS_MODULES=(
+    squashfs isofs loop overlay
+    sr_mod cdrom sd_mod
+    libata ata_piix ata_generic ahci
+    virtio_blk virtio_pci virtio_scsi
+    hv_vmbus hv_storvsc hyperv_keyboard hid_hyperv
+    nvme
+    usb-storage uas xhci_pci ehci-pci ohci-hcd uhci-hcd usbhid hid_generic
+)
+
+# Modules the live root loads once it is running. The image has no module index
+# and depmod cannot write to a read-only squashfs, so these are loaded by path.
+LIVE_MODULES=(
+    hv_vmbus hv_storvsc hv_netvsc hv_utils hv_balloon
+    hid_hyperv hyperv_keyboard
+    virtio_pci virtio_blk virtio_net virtio_scsi virtio_balloon virtio_rng
+    usbhid hid_generic usb-storage uas xhci_pci ehci-pci ohci-hcd uhci-hcd
+    atkbd psmouse
+    e1000 e1000e r8169
+)
+
 # --- tool resolution -------------------------------------------------------
 if [ -d "$TOOLS/usr/bin" ]; then
     MKSQUASHFS="$TOOLS/usr/bin/mksquashfs"
@@ -162,7 +188,8 @@ echo "[4/6] building initramfs (kernel $KVER)"
 IR="$WORK/initramfs"
 mkdir -p "$IR"/{bin,dev,proc,sys,media,root,lib/modules}
 install -m755 "$BUSYBOX" "$IR/bin/busybox"
-for applet in sh mount umount insmod switch_root sleep echo cat mkdir readlink; do
+for applet in sh mount umount insmod switch_root sleep echo cat mkdir readlink \
+              dmesg ls uname tail sed grep mknod setsid cttyhack modprobe; do
     ln -sfn busybox "$IR/bin/$applet"
 done
 install -m755 "$ROOT/iso/live/init" "$IR/init"
@@ -172,9 +199,7 @@ if [ -d "$MODDIR" ]; then
     # init has no /dev/sr0 (or USB disk) to mount, and the boot fails with "no
     # live medium found". Seed the closure with every medium the init probes.
     python3 "$ROOT/scripts/module-closure.py" --modules-dir "$MODDIR" \
-        squashfs isofs loop overlay \
-        sr_mod cdrom sd_mod ahci virtio_blk virtio_pci \
-        usb-storage uas xhci_pci > "$WORK/modules.list"
+        "${INITRAMFS_MODULES[@]}" > "$WORK/modules.list"
     : > "$IR/modules.load"
     while IFS= read -r relative; do
         [ -n "$relative" ] || continue
@@ -191,6 +216,20 @@ fi
 ( cd "$IR" && find . | "$BUSYBOX" cpio -o -H newc 2>/dev/null ) \
     | gzip -9 > "$WORK/root/boot/initrd.img-$KVER"
 echo "      initramfs: $(du -h "$WORK/root/boot/initrd.img-$KVER" | cut -f1)"
+
+# The running live system loads the rest by path (no depmod, no modules.dep).
+: > "$WORK/root/etc/unify/live-modules.load"
+if [ -d "$MODDIR" ]; then
+    python3 "$ROOT/scripts/module-closure.py" --modules-dir "$MODDIR" \
+        "${LIVE_MODULES[@]}" > "$WORK/live-modules.list" 2>/dev/null || true
+    while IFS= read -r relative; do
+        [ -n "$relative" ] || continue
+        [ -f "$WORK/root/lib/modules/$KVER/$relative" ] || continue
+        printf '/lib/modules/%s/%s\n' "$KVER" "$relative" \
+            >> "$WORK/root/etc/unify/live-modules.load"
+    done < "$WORK/live-modules.list"
+    echo "      $(wc -l < "$WORK/root/etc/unify/live-modules.load") modules for the live root"
+fi
 
 echo "[5/6] assembling ISO"
 SQUASH_LEVEL="$SQUASH_LEVEL" \
