@@ -77,7 +77,19 @@ fi
 
 echo "[unify] live session user"
 if ! id unify >/dev/null 2>&1; then
-    useradd -m -s /bin/bash -G sudo,video,audio,input,netdev,bluetooth,plugdev unify
+    # Attach only the supplementary groups this edition ships; the minimal
+    # profile has no BlueZ, so a literal -G list makes useradd fail.
+    ADD_GROUPS=""
+    for group in sudo video audio input netdev bluetooth plugdev; do
+        if getent group "$group" >/dev/null 2>&1; then
+            ADD_GROUPS="${ADD_GROUPS:+$ADD_GROUPS,}$group"
+        fi
+    done
+    if [ -n "$ADD_GROUPS" ]; then
+        useradd -m -s /bin/bash -G "$ADD_GROUPS" unify
+    else
+        useradd -m -s /bin/bash unify
+    fi
     passwd -d unify >/dev/null 2>&1 || true
 fi
 
