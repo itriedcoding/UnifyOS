@@ -22,6 +22,8 @@ QEMU="${QEMU:-qemu-system-x86_64}"
 MEMORY="${QEMU_MEMORY:-1024}"
 TIMEOUT="${BOOT_TIMEOUT:-240}"
 LOGDIR="$ROOT/build/boottest"
+ACCEL="-accel tcg"
+[ -w /dev/kvm ] && ACCEL="-accel kvm"
 
 if [ -z "$ISO" ] || [ ! -f "$ISO" ]; then
     echo "usage: $0 path/to/image.iso" >&2
@@ -75,7 +77,7 @@ boot_bios() {
     local log="$LOGDIR/bios.log"
     echo "[bios] booting $ISO"
     timeout "$TIMEOUT" "$QEMU" \
-        -machine q35 -m "$MEMORY" -accel tcg \
+        -machine q35 -m "$MEMORY" ${ACCEL} \
         -drive file="$ISO",media=cdrom,readonly=on \
         -boot d -no-reboot -nographic -monitor none \
         -serial "file:$log" >/dev/null 2>&1 || true
@@ -95,7 +97,7 @@ boot_uefi() {
 
     echo "[uefi] booting $ISO with $OVMF_CODE"
     timeout "$TIMEOUT" "$QEMU" \
-        -machine q35 -m "$MEMORY" -accel tcg \
+        -machine q35 -m "$MEMORY" ${ACCEL} \
         -drive if=pflash,format=raw,readonly=on,file="$OVMF_CODE" \
         -drive if=pflash,format=raw,file="$vars" \
         -drive file="$ISO",media=cdrom,readonly=on \

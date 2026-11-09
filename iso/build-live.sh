@@ -1,16 +1,18 @@
 #!/usr/bin/env bash
 # UnifyOS live image builder.
 #
-# Assembles a bootable live system from three inputs, all of which can be
-# prepared without root: a Debian base root filesystem (or a full desktop
-# rootfs), a Debian kernel package tree and busybox-static. It writes a kernel
-# and an initramfs into the rootfs and then hands over to iso/make-iso.sh, which
-# produces the hybrid BIOS+UEFI image.
+# Assembles a bootable live system from a root filesystem plus a kernel tree and
+# busybox, then hands over to iso/make-iso.sh for the hybrid BIOS+UEFI image.
 #
 #   ./iso/build-live.sh                 # minimal console image
 #   EDITION=desktop ./iso/build-live.sh # when a desktop rootfs is available
 #
-# Environment: KERNEL_DIR BASE_ROOTFS BUSYBOX TOOLS MTOOLS OUT SQUASH_LEVEL
+# On a normal Linux host the tools come from the system (squashfs-tools,
+# xorriso, grub-pc-bin, grub-efi-amd64-bin, mtools, busybox-static). In the
+# unprivileged container the same tools are extracted under build/tools and
+# build/mtools; they are used automatically when present.
+#
+# Environment: KERNEL_DIR BASE_ROOTFS BUSYBOX TOOLS MTOOLS OUT SQUASH_LEVEL EDITION
 
 set -euo pipefail
 
@@ -20,27 +22,62 @@ VERSION="$(cat "$ROOT/VERSION")"
 
 KERNEL_DIR="${KERNEL_DIR:-$ROOT/build/kernel}"
 BASE_ROOTFS="${BASE_ROOTFS:-$ROOT/build/rootfs4}"
-BUSYBOX="${BUSYBOX:-$ROOT/build/busybox-root/bin/busybox}"
 TOOLS="${TOOLS:-$ROOT/build/tools/hostroot}"
 MTOOLS="${MTOOLS:-$ROOT/build/mtools/usr/bin}"
 SQUASH_LEVEL="${SQUASH_LEVEL:-3}"
 OUT="${OUT:-$ROOT/out/UnifyOS-$VERSION-$EDITION-amd64.iso}"
 WORK="$ROOT/build/live-$EDITION"
 
-for path in "$KERNEL_DIR" "$BASE_ROOTFS" "$BUSYBOX" "$TOOLS"; do
-    if [ ! -e "$path" ]; then
-        echo "error: missing required input: $path" >&2
+# --- tool resolution -------------------------------------------------------
+if [ -d "$TOOLS/usr/bin" ]; then
+    MKSQUASHFS="$TOOLS/usr/bin/mksquashfs"
+    XORRISO="$TOOLS/usr/bin/xorriso"
+    GRUB_MKIMAGE="$TOOLS/usr/bin/grub-mkimage"
+    GRUB_MKSTANDALONE="$TOOLS/usr/bin/grub-mkstandalone"
+    GRUB_LIB="$TOOLS/usr/lib/grub"
+    export LD_LIBRARY_PATH="$TOOLS/usr/lib/x86_64-linux-gnu:$TOOLS/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    export PATH="$TOOLS/usr/bin:$PATH"
+else
+    MKSQUASHFS="$(command -v mksquashfs || true)"
+    XORRISO="$(command -v xorriso || true)"
+    GRUB_MKIMAGE="$(command -v grub-mkimage || true)"
+    GRUB_MKSTANDALONE="$(command -v grub-mkstandalone || true)"
+    GRUB_LIB="/usr/lib/grub"
+fi
+
+if [ -x "$MTOOLS/mformat" ]; then
+    MFORMAT="$MTOOLS/mformat"
+    MMD="$MTOOLS/mmd"
+    MCOPY="$MTOOLS/mcopy"
+    export PATH="$MTOOLS:$PATH"
+else
+    MFORMAT="$(command -v mformat || true)"
+    MMD="$(command -v mmd || true)"
+    MCOPY="$(command -v mcopy || true)"
+fi
+
+if [ -z "${BUSYBOX:-}" ]; then
+    if [ -x "$ROOT/build/busybox-root/bin/busybox" ]; then
+        BUSYBOX="$ROOT/build/busybox-root/bin/busybox"
+    else
+        BUSYBOX="$(command -v busybox || true)"
+    fi
+fi
+
+for path in "$KERNEL_DIR" "$BASE_ROOTFS"; do
+    if [ ! -d "$path" ]; then
+        echo "error: missing required directory: $path" >&2
         exit 1
     fi
 done
-
-export LD_LIBRARY_PATH="$TOOLS/usr/lib/x86_64-linux-gnu:$TOOLS/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-export PATH="$TOOLS/usr/bin:$MTOOLS:$PATH"
-
-RUSTUP_HOME="${RUSTUP_HOME:-$ROOT/build/toolchain/rustup}"
-CARGO_HOME="${CARGO_HOME:-$ROOT/build/toolchain/cargo}"
-export RUSTUP_HOME CARGO_HOME
-export PATH="$CARGO_HOME/bin:$PATH"
+for tool in "$MKSQUASHFS" "$XORRISO" "$GRUB_MKIMAGE" "$GRUB_MKSTANDALONE" \
+            "$MFORMAT" "$MMD" "$MCOPY" "$BUSYBOX"; do
+    if [ -z "$tool" ] || [ ! -x "$tool" ]; then
+        echo "error: required tool not found: '${tool:-?}'" >&2
+        echo "       install squashfs-tools xorriso grub-pc-bin grub-efi-amd64-bin mtools busybox-static" >&2
+        exit 1
+    fi
+done
 
 KERNEL="$(ls "$KERNEL_DIR"/boot/vmlinuz-* 2>/dev/null | head -1)"
 [ -n "$KERNEL" ] || { echo "error: no vmlinuz in $KERNEL_DIR/boot" >&2; exit 1; }
@@ -59,11 +96,11 @@ cp -a "$BASE_ROOTFS"/. "$WORK/root/"
 mkdir -p "$WORK/root"/{proc,sys,dev,run,tmp,var/tmp,var/log,mnt,media,boot/grub,etc/unify}
 install -m644 "$KERNEL" "$WORK/root/boot/vmlinuz-$KVER"
 
-# Modules are hard-linked: same filesystem, no extra disk use, and mksquashfs
-# still stores their contents in the image.
+# Modules are hard-linked when possible: same filesystem, no extra disk use.
 if [ -d "$MODDIR" ]; then
     mkdir -p "$WORK/root/lib/modules"
-    cp -al "$MODDIR" "$WORK/root/lib/modules/$KVER"
+    cp -al "$MODDIR" "$WORK/root/lib/modules/$KVER" 2>/dev/null \
+        || cp -a "$MODDIR" "$WORK/root/lib/modules/$KVER"
 fi
 
 for binary in unify-ctl unify-sysmond unify-pkg; do
@@ -120,16 +157,21 @@ for applet in sh mount umount insmod switch_root sleep echo cat mkdir readlink; 
 done
 install -m755 "$ROOT/iso/live/init" "$IR/init"
 
-python3 "$ROOT/scripts/module-closure.py" --modules-dir "$MODDIR" \
-    squashfs isofs loop > "$WORK/modules.list"
-: > "$IR/modules.load"
-while IFS= read -r relative; do
-    [ -n "$relative" ] || continue
-    mkdir -p "$IR/lib/modules/$KVER/$(dirname "$relative")"
-    cp "$MODDIR/$relative" "$IR/lib/modules/$KVER/$relative"
-    printf 'lib/modules/%s/%s\n' "$KVER" "$relative" >> "$IR/modules.load"
-done < "$WORK/modules.list"
-echo "      $(wc -l < "$IR/modules.load") modules in initramfs"
+if [ -d "$MODDIR" ]; then
+    python3 "$ROOT/scripts/module-closure.py" --modules-dir "$MODDIR" \
+        squashfs isofs loop > "$WORK/modules.list"
+    : > "$IR/modules.load"
+    while IFS= read -r relative; do
+        [ -n "$relative" ] || continue
+        mkdir -p "$IR/lib/modules/$KVER/$(dirname "$relative")"
+        cp "$MODDIR/$relative" "$IR/lib/modules/$KVER/$relative"
+        printf 'lib/modules/%s/%s\n' "$KVER" "$relative" >> "$IR/modules.load"
+    done < "$WORK/modules.list"
+    echo "      $(wc -l < "$IR/modules.load") modules in initramfs"
+else
+    echo "warning: no module tree at $MODDIR; the initramfs will have no storage modules" >&2
+    : > "$IR/modules.load"
+fi
 
 ( cd "$IR" && find . | "$BUSYBOX" cpio -o -H newc 2>/dev/null ) \
     | gzip -9 > "$WORK/root/boot/initrd.img-$KVER"
@@ -137,17 +179,17 @@ echo "      initramfs: $(du -h "$WORK/root/boot/initrd.img-$KVER" | cut -f1)"
 
 echo "[5/6] assembling ISO"
 SQUASH_LEVEL="$SQUASH_LEVEL" \
-MKSQUASHFS="$TOOLS/usr/bin/mksquashfs" \
-XORRISO="$TOOLS/usr/bin/xorriso" \
-GRUB_MKIMAGE="$TOOLS/usr/bin/grub-mkimage" \
-GRUB_MKSTANDALONE="$TOOLS/usr/bin/grub-mkstandalone" \
-GRUB_LIB="$TOOLS/usr/lib/grub" \
-MFORMAT="$MTOOLS/mformat" MMD="$MTOOLS/mmd" MCOPY="$MTOOLS/mcopy" \
+MKSQUASHFS="$MKSQUASHFS" \
+XORRISO="$XORRISO" \
+GRUB_MKIMAGE="$GRUB_MKIMAGE" \
+GRUB_MKSTANDALONE="$GRUB_MKSTANDALONE" \
+GRUB_LIB="$GRUB_LIB" \
+MFORMAT="$MFORMAT" MMD="$MMD" MCOPY="$MCOPY" \
     "$ROOT/iso/make-iso.sh" --rootfs "$WORK/root" --edition "$EDITION" \
         --output "$OUT" --compression zstd
 
 echo "[6/6] verifying image structure"
-"$TOOLS/usr/bin/xorriso" -indev "$OUT" -report_el_torito plain 2>/dev/null | sed -n '1,20p' || true
+"$XORRISO" -indev "$OUT" -report_el_torito plain 2>/dev/null | sed -n '1,20p' || true
 
 echo
 echo "Built $OUT"

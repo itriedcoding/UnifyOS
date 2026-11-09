@@ -15,7 +15,7 @@ RUSTUP_HOME ?= $(CURDIR)/build/toolchain/rustup
 CARGO ?= $(CARGO_HOME)/bin/cargo
 
 .PHONY: all help system test test-system test-installer check-scripts \
-        rootfs-desktop rootfs-minimal iso iso-desktop iso-minimal checksums clean
+        rootfs-desktop rootfs-minimal iso iso-desktop iso-minimal iso-live boot-test checksums clean
 
 all: system
 
@@ -66,5 +66,10 @@ clean:
 	rm -rf build/rootfs-desktop build/rootfs-minimal build/iso-desktop build/iso-minimal \
 	       system/target $(OUT)
 
+ISO ?= $(OUT)/UnifyOS-$(VERSION)-minimal-amd64.iso
+
+iso-live:
+	./iso/build-live.sh
+
 boot-test:
-	./scripts/qemu-boot-test.sh out/UnifyOS-0.1.0-minimal-amd64.iso
+	./scripts/qemu-boot-test.sh $(ISO)

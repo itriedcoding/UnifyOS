@@ -1,0 +1,71 @@
+name: ISO build and boot test
+
+# Builds the minimal live image on a Linux runner, boots it under both BIOS and
+# UEFI firmware in QEMU, and only then publishes it. A tag push creates a
+# GitHub release with the image and its checksum; a manual run keeps the image
+# as a workflow artifact.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  iso:
+    name: Build, boot-test and publish
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Install build and emulation tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            mmdebstrap debian-archive-keyring \
+            squashfs-tools xorriso mtools busybox-static \
+            grub-pc-bin grub-efi-amd64-bin \
+            qemu-system-x86 ovmf seabios \
+            python3
+
+      - name: Bootstrap the minimal root filesystem
+        run: |
+          sudo ./iso/bootstrap-rootfs.sh --edition minimal --target build/rootfs-minimal
+
+      - name: Build the live ISO
+        run: |
+          chmod +x iso/*.sh scripts/*.sh
+          KERNEL_DIR="$PWD/build/rootfs-minimal" \
+          BASE_ROOTFS="$PWD/build/rootfs-minimal" \
+          BUSYBOX="$(command -v busybox)" \
+            ./iso/build-live.sh
+
+      - name: Boot test under BIOS and UEFI
+        run: |
+          ISO="$(ls out/*-minimal-amd64.iso | head -1)"
+          echo "testing $ISO"
+          ./scripts/qemu-boot-test.sh "$ISO"
+
+      - name: Upload image
+        uses: actions/upload-artifact@v4
+        with:
+          name: unifyos-minimal-iso
+          path: |
+            out/*.iso
+            out/*.sha256
+          retention-days: 14
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            out/*.iso out/*.sha256 \
+            --title "UnifyOS ${GITHUB_REF_NAME#v}" \
+            --notes "Minimal live image. Booted under BIOS and UEFI in CI before publication."
