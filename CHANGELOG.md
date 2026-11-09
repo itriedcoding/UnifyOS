@@ -54,9 +54,12 @@ Foundation release with a GTK4 application suite and a bootable-image pipeline.
 
 ### Artifacts
 
-* `out/UnifyOS-0.1.0-minimal-amd64.iso` — 189 MB hybrid BIOS+UEFI live image,
-  El Torito entries for both firmware types verified, SHA256 published beside
-  it. **Not booted**: no virtual machine or hardware was available.
+* `UnifyOS-0.1.0-minimal-amd64.iso` - 292 MiB hybrid BIOS+UEFI live image,
+  published at https://github.com/itriedcoding/UnifyOS/releases/tag/v0.1.0
+  with SHA256
+  `be72b9970380826fed72befb4dcbccece0004708a1076e0981ccdf1a41d67797`.
+  Boot-tested by the CI that built it: both SeaBIOS and OVMF reached the live
+  session before the release step ran.
 
 ### Not included
 

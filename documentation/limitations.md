@@ -18,17 +18,22 @@ Verified by running the code:
   disk-safety refusals and the complete dry-run command sequence.
 * **Application suite** — all ten GTK4 programs compile against GTK4 4.8 with
   `-Wall -Wextra` and produce zero warnings.
-* **Live ISO** — `iso/build-live.sh` produced a 189 MB hybrid image; `xorriso`
+* **Live ISO** - CI builds a 292 MiB hybrid image on `ubuntu-24.04`; `xorriso`
   reports both El Torito entries (BIOS `eltorito.img`, UEFI `efi.img`), the
-  squashfs is 168 MB with `-all-root` ownership normalisation, and a SHA256
+  squashfs is 266 MB with `-all-root` ownership normalisation, and a SHA256
   checksum is written next to the image.
+* **The minimal ISO boots.** `scripts/qemu-boot-test.sh` booted
+  `UnifyOS-0.1.0-minimal-amd64.iso` under SeaBIOS and under OVMF; both cases
+  reached the live session, printing `unify-live: live medium found` and
+  `Live session ready` on the serial console. That build is published at
+  https://github.com/itriedcoding/UnifyOS/releases/tag/v0.1.0.
 
 ## Not verified
 
-* **The ISO has never been booted.** There is no virtual machine or hardware in
-  this container. GRUB menu entries, the initramfs module loading, the squashfs
-  switch_root and the busybox init flow are therefore unproven. Booting it under
-  UEFI and BIOS is the single most important next step.
+* **Only the minimal console image is boot-tested.** The boot test proves GRUB,
+  initramfs module loading, squashfs `switch_root` and busybox init reach a
+  session on both firmwares. It does not exercise a desktop session, hardware
+  beyond the emulated QEMU devices, or booting from a USB stick.
 * **No application has been launched.** GTK4 applications need a display
   server; this container has none. Compilation proves the code is well formed
   and links against GTK4, not that the windows behave correctly.
@@ -68,11 +73,10 @@ Verified by running the code:
 ## Boot testing
 
 `scripts/qemu-boot-test.sh` boots an image under SeaBIOS and OVMF and exits
-non-zero unless the serial console reaches the live session. It has **not been
-run**: the environment this project was assembled in had no virtual machine, and
-the machine currently available is Windows without WSL, QEMU or a Linux
-toolchain. The ISO artifact was not retained there either, so it must be rebuilt
-with `./iso/build-live.sh` on a Linux host before the harness can run.
+non-zero unless the serial console reaches the live session. CI runs it on every
+tag and every manual build, and the v0.1.0 image passed both cases. Both serial
+logs are kept as the `boottest-logs` artifact, so a failure names the missing
+marker and prints the tail of the console.
 
 ## Known portability requirements
 
@@ -84,9 +88,8 @@ with `./iso/build-live.sh` on a Linux host before the harness can run.
 
 ## Next steps, in order
 
-1. Boot the minimal ISO in QEMU with UEFI and BIOS firmware; fix whatever the
-   boot path exposes.
-2. Build the desktop root filesystem on a privileged host, integrate the GTK4
+1. Build the desktop root filesystem on a privileged host, integrate the GTK4
    applications and their runtime libraries, and boot the desktop image.
-3. Run the graphical installer against a spare disk and boot the result.
-4. Measure idle memory, installed size and boot time on documented hardware.
+2. Run the graphical installer against a spare disk and boot the result.
+3. Measure idle memory, installed size and boot time on documented hardware.
+4. Boot the published image on real hardware and from a USB stick.

@@ -18,7 +18,7 @@ states exactly what has been verified in this repository and what has not.
 | `system/unify-pkg` — apt front-end with essential-package protection | Implemented | builds; `help` verified |
 | `installer/` — plan model, disk safety, partitioning, chroot, GRUB | Implemented | 19 unit tests incl. dry-run sequence |
 | `installer/unify-installer` — CLI front end for the above | Implemented | dry run verified |
-| `iso/build-live.sh` + `iso/make-iso.sh` — live image and hybrid ISO | Implemented | ISO produced, structure verified |
+| `iso/build-live.sh` + `iso/make-iso.sh` - live image and hybrid ISO | Implemented | built and booted under BIOS and UEFI in CI |
 | Desktop configuration (labwc, waybar, fuzzel, mako), themes, branding | Implemented | configuration files |
 
 ## The applications
@@ -58,16 +58,17 @@ It stages a root filesystem, installs busybox init plus the Rust system
 binaries, builds an initramfs containing the kernel modules needed to mount the
 live medium, squashes the root, and writes a hybrid BIOS+UEFI image with GRUB.
 
-Latest build in this container:
+Latest published build, produced and tested by CI:
 
 ```
-out/UnifyOS-0.1.0-minimal-amd64.iso        189 MB
-sha256 130c45cd1e80debbc514758811e4b953566e20c8e2c0daea31139c21dde6d25d
+UnifyOS-0.1.0-minimal-amd64.iso        292 MiB
+sha256 be72b9970380826fed72befb4dcbccece0004708a1076e0981ccdf1a41d67797
 El Torito: BIOS (eltorito.img) + UEFI (efi.img)
 ```
 
-**It has never been booted.** The build container has no KVM, no QEMU and no
-hardware access, so the boot path is unproven; see the limitations document.
+Both firmware types reached the live session during that build, under SeaBIOS
+and OVMF. Download it from the
+[v0.1.0 release](https://github.com/itriedcoding/UnifyOS/releases/tag/v0.1.0).
 
 ## Building and testing
 
