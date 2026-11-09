@@ -41,8 +41,11 @@ install -m755 "$ROOT/iso/live/init" "$STAGE/init"
 
 echo "running iso/live/init without a live medium; it must never return"
 
+# The init waits up to 15 s for a device node before it gives up, so the window
+# has to be longer than that or the run ends in the wait instead of the failure.
+WINDOW=25
 set +e
-timeout 8 unshare -m --propagation private chroot "$STAGE" /init </dev/null >"$LOG" 2>&1
+timeout "$WINDOW" unshare -m --propagation private chroot "$STAGE" /init </dev/null >"$LOG" 2>&1
 status=$?
 set -e
 
