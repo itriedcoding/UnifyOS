@@ -23,7 +23,7 @@ Verified by running the code:
   `iso/live/init` in a private mount namespace with no live medium and requires
   it to still be running after 8 seconds, so PID 1 survives the failure path
   that panicked a virtual machine.
-* **Live ISO** — CI builds a hybrid image on `ubuntu-24.04`; `xorriso` reports
+* **Live ISO** — CI builds a 293 MiB hybrid image on `ubuntu-24.04`; `xorriso` reports
   both El Torito entries (BIOS `eltorito.img`, UEFI `efi.img`), the squashfs is
   written with `-all-root` ownership normalisation, and a SHA256 checksum is
   written next to the image.
@@ -31,7 +31,8 @@ Verified by running the code:
   `UnifyOS-0.1.1-minimal-amd64.iso` three times — SeaBIOS, OVMF and a
   virtio-scsi CD — and each case must print `unify-live: live medium found` and
   `Live session ready` on the serial console with no kernel panic in the log.
-  The v0.1.0 image passed the first two; v0.1.1 adds the third.
+  The published v0.1.1 image passed all three, and the boot step fails the run
+  if any case logs a kernel panic.
 
 ## Not verified
 

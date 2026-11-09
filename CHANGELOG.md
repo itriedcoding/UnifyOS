@@ -43,6 +43,16 @@ session accounts.
 * **Documented credentials.** `unify` / `unify` with `sudo`; direct root login is
   locked and the live console is already a root shell (see `README.md`).
 
+### Artifacts
+
+* `UnifyOS-0.1.1-minimal-amd64.iso` — 293 MiB (307,232,768 bytes) hybrid
+  BIOS+UEFI live image, published at
+  https://github.com/itriedcoding/UnifyOS/releases/tag/v0.1.1 with SHA256
+  `f9c4055fce8ef395e728fc45e6c88e2d7431299aa424d59f51ab837e7c79ed04`.
+  CI booted it under SeaBIOS, under OVMF and from a virtio-scsi CD before the
+  release step ran; the initramfs carries 46 modules and the live root loads 41
+  more by path.
+
 ## [0.1.0] — 2026-11-09
 
 Foundation release with a GTK4 application suite and a bootable-image pipeline.

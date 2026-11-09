@@ -93,7 +93,9 @@ kernel.
 Latest published build, produced and tested by CI:
 
 ```
-UnifyOS-0.1.1-minimal-amd64.iso        see the release page for size and checksum
+UnifyOS-0.1.1-minimal-amd64.iso        293 MiB (307,232,768 bytes)
+sha256 f9c4055fce8ef395e728fc45e6c88e2d7431299aa424d59f51ab837e7c79ed04
+El Torito: BIOS (eltorito.img) + UEFI (efi.img)
 ```
 
 Both firmware types and two CD transports reached the live session during that
