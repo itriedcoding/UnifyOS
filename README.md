@@ -83,6 +83,18 @@ On a normal system the ISO stage needs `squashfs-tools`, `xorriso`,
 the helpers in `scripts/` reconstruct the GRUB index files and module closure
 that Debian's binary packages leave to `depmod`.
 
+## Continuous integration
+
+`.github/workflows/iso.yml` builds the image on a Linux runner, boots it under
+SeaBIOS and OVMF in QEMU, and publishes it. A failed boot stops the job before
+the release step, so a published image is one that reached the live session.
+
+```bash
+git tag v0.1.0 && git push origin v0.1.0   # build + boot test + release
+```
+
+A manual run keeps the image as a workflow artifact instead of a release.
+
 ## License
 
 GPL-3.0-or-later. See [LICENSE](LICENSE).

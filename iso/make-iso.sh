@@ -147,7 +147,11 @@ GRUB_MODULES="part_gpt part_msdos iso9660 fat normal search search_label configf
 EFI_BUILT=0
 for grub_directory in "$GRUB_LIB/x86_64-efi" "$GRUB_LIB"; do
     [ -d "$grub_directory" ] || continue
-    if "$GRUB_MKSTANDALONE" -O x86_64-efi --directory="$grub_directory"         --locales="" --fonts=""         --output="$WORK/isodir/EFI/BOOT/BOOTX64.EFI"         --modules="$GRUB_MODULES"         "boot/grub/grub.cfg=$WORK/embed.cfg"; then
+    if "$GRUB_MKSTANDALONE" -O x86_64-efi --directory="$grub_directory" \
+        --locales="" --fonts="" \
+        --output="$WORK/isodir/EFI/BOOT/BOOTX64.EFI" \
+        --modules="$GRUB_MODULES" \
+        "boot/grub/grub.cfg=$WORK/embed.cfg"; then
         EFI_BUILT=1
         break
     fi

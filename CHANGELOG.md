@@ -46,6 +46,10 @@ Foundation release with a GTK4 application suite and a bootable-image pipeline.
   19 unit tests.
 * **Desktop and branding**: labwc/waybar/fuzzel/mako configuration, themes,
   wallpapers, udev rule, systemd units.
+* **CI pipeline** (`.github/workflows/iso.yml`): bootstraps the root filesystem,
+  builds the ISO, boots it under BIOS and UEFI in QEMU, uploads it as an
+  artifact and attaches it to a GitHub release on a `v*` tag. The release step
+  runs only after both boot tests pass.
 * **Documentation**: README, this changelog and `documentation/limitations.md`.
 
 ### Artifacts
