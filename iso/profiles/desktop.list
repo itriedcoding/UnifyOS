@@ -1,0 +1,118 @@
+# UnifyOS Desktop edition — package selection.
+# One package per line. Everything here is required for the default desktop;
+# optional software is installed later through Unify Store so the base image
+# stays small.
+#
+# Init, session and live-boot support
+systemd-sysv
+systemd-timesyncd
+dbus
+dbus-user-session
+polkitd
+pkexec
+live-boot
+live-config
+sudo
+locales
+console-setup
+keyboard-configuration
+tzdata
+ca-certificates
+#
+# Kernel and firmware
+linux-image-amd64
+firmware-linux-free
+firmware-iwlwifi
+firmware-realtek
+firmware-atheros
+#
+# Unify Desktop session (Wayland, labwc compositor)
+labwc
+xwayland
+waybar
+fuzzel
+mako-notifier
+swaybg
+swayidle
+swaylock
+wl-clipboard
+grim
+slurp
+wlr-randr
+kanshi
+xdg-desktop-portal-wlr
+xdg-user-dirs
+xdg-utils
+#
+# Audio
+pipewire
+pipewire-pulse
+wireplumber
+pulseaudio-utils
+alsa-utils
+#
+# Networking, Bluetooth, power
+network-manager
+iw
+bluez
+blueman
+upower
+#
+# Toolkit runtimes used by Unify applications
+libgtk-4-1
+libadwaita-1-0
+libvte-2.91-gtk4-0
+adwaita-icon-theme
+papirus-icon-theme
+fonts-inter
+fonts-dejavu-core
+fonts-noto-core
+fonts-firacode
+#
+# Preinstalled applications (one per function, no duplicates)
+firefox-esr
+mousepad
+evince
+galculator
+file-roller
+imv
+mpv
+abiword
+gnumeric
+#
+# System utilities
+parted
+gdisk
+dosfstools
+e2fsprogs
+efibootmgr
+grub-pc-bin
+grub-efi-amd64-bin
+grub2-common
+os-prober
+rsync
+curl
+wget
+openssh-client
+git
+nano
+vim-tiny
+less
+unzip
+xz-utils
+zstd
+#
+# Security
+ufw
+nftables
+apparmor
+apparmor-profiles
+#
+# Boot splash
+plymouth
+plymouth-themes
+#
+# Toolchain (GCC, Python); Clang and Rust are optional Store packages
+python3
+gcc
+make

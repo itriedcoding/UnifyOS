@@ -1,0 +1,26 @@
+[Unit]
+Description=UnifyOS system sampler
+Documentation=file:///usr/share/doc/unifyos/architecture.md
+After=local-fs.target
+Before=graphical.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/unify-sysmond --interval 1000
+Restart=on-failure
+RestartSec=2
+RuntimeDirectory=unify
+RuntimeDirectoryMode=0755
+# Keep the sampler cheap and bounded: idle I/O class, low priority, hard cap.
+Nice=10
+IOSchedulingClass=idle
+MemoryMax=24M
+CPUQuota=5%
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadOnlyPaths=/proc /sys
+
+[Install]
+WantedBy=multi-user.target

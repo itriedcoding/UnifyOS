@@ -1,0 +1,17 @@
+[workspace]
+resolver = "2"
+members = ["unify-core", "unify-ctl", "unify-sysmond", "unify-pkg"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.70"
+license = "GPL-3.0-or-later"
+authors = ["UnifyOS Contributors"]
+repository = "https://github.com/itriedcoding/UnifyOS"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true

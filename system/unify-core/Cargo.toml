@@ -1,0 +1,9 @@
+[package]
+name = "unify-core"
+description = "Shared, dependency-free system-information library for UnifyOS"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]

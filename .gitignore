@@ -1,0 +1,35 @@
+# Build output and locally extracted build tools
+/build/
+/tools/
+/out/
+/dist/
+
+# Images and checksum side-cars
+*.iso
+*.squashfs
+*.img
+*.sha256
+
+# Rust
+target/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+
+# Meson / Ninja
+/subprojects/packagecache/
+builddir/
+*.ninja
+
+# Editor / OS noise
+*~
+.DS_Store
+compile_commands.json
+
+# Local secrets and keys used for signing local test repositories
+*.key
+*.gpg
+private/

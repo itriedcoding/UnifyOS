@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Unify Desktop: labwc configuration. Installed to /etc/skel/.config/labwc. -->
+<labwc_config>
+  <core>
+    <gap>0</gap>
+    <adaptiveSync>no</adaptiveSync>
+    <primarySelection>true</primarySelection>
+    <reuseOutputMode>yes</reuseOutputMode>
+  </core>
+
+  <theme>
+    <name>unify-dark</name>
+    <cornerRadius>12</cornerRadius>
+    <font place="ActiveWindow"><name>Inter</name><size>10</size><weight>bold</weight></font>
+    <font place="InactiveWindow"><name>Inter</name><size>10</size></font>
+    <font place="MenuItem"><name>Inter</name><size>10</size></font>
+    <font place="OnScreenDisplay"><name>Inter</name><size>11</size></font>
+  </theme>
+
+  <keyboard>
+    <default/>
+    <keybind key="W-Return"><action name="Execute" command="foot"/></keybind>
+    <keybind key="W-d"><action name="Execute" command="fuzzel"/></keybind>
+    <keybind key="W-e"><action name="Execute" command="pcmanfm"/></keybind>
+    <keybind key="W-q"><action name="Close"/></keybind>
+    <keybind key="W-f"><action name="ToggleFullscreen"/></keybind>
+    <keybind key="W-a"><action name="ToggleMaximize"/></keybind>
+    <keybind key="A-Tab"><action name="NextWindow"/></keybind>
+    <keybind key="W-l"><action name="Execute" command="swaylock -f -c 0b0e14"/></keybind>
+    <keybind key="Print"><action name="Execute" command="unify-screenshot"/></keybind>
+    <keybind key="Shift-Print"><action name="Execute" command="unify-screenshot region"/></keybind>
+    <keybind key="W-1"><action name="GoToDesktop" to="1"/></keybind>
+    <keybind key="W-2"><action name="GoToDesktop" to="2"/></keybind>
+    <keybind key="W-3"><action name="GoToDesktop" to="3"/></keybind>
+    <keybind key="W-4"><action name="GoToDesktop" to="4"/></keybind>
+    <keybind key="W-Left"><action name="SnapToEdge" direction="left"/></keybind>
+    <keybind key="W-Right"><action name="SnapToEdge" direction="right"/></keybind>
+    <keybind key="W-Up"><action name="SnapToEdge" direction="up"/></keybind>
+    <keybind key="W-Down"><action name="SnapToEdge" direction="down"/></keybind>
+    <keybind key="XF86AudioRaiseVolume"><action name="Execute" command="wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+"/></keybind>
+    <keybind key="XF86AudioLowerVolume"><action name="Execute" command="wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"/></keybind>
+    <keybind key="XF86AudioMute"><action name="Execute" command="wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"/></keybind>
+    <keybind key="XF86MonBrightnessUp"><action name="Execute" command="unify-ctl brightness up"/></keybind>
+    <keybind key="XF86MonBrightnessDown"><action name="Execute" command="unify-ctl brightness down"/></keybind>
+  </keyboard>
+
+  <mouse>
+    <default/>
+    <context name="Frame">
+      <mousebind button="A-Left" action="Drag"/>
+      <mousebind button="A-Left" action="Focus"/>
+      <mousebind button="A-Right" action="Focus"/>
+    </context>
+    <context name="Titlebar">
+      <mousebind button="Left" action="Drag"/>
+      <mousebind button="Left" action="DoubleClick"/>
+    </context>
+  </mouse>
+
+  <windowRules>
+    <windowRule identifier="waybar" serverDecoration="no" skipTaskbar="yes" skipWindowSwitcher="yes"/>
+  </windowRules>
+</labwc_config>

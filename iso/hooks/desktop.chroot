@@ -1,0 +1,46 @@
+#!/bin/bash
+# UnifyOS Desktop edition configuration.
+set -euo pipefail
+export DEBIAN_FRONTEND=noninteractive
+
+echo "[unify] graphical session"
+systemctl set-default graphical.target >/dev/null 2>&1 || true
+if [ -f /etc/systemd/system/unify-session.service ]; then
+    systemctl enable unify-session.service >/dev/null 2>&1 || true
+    systemctl disable getty@tty1.service >/dev/null 2>&1 || true
+fi
+
+echo "[unify] GTK defaults"
+install -d /etc/gtk-4.0 /etc/gtk-3.0
+cat > /etc/gtk-4.0/settings.ini <<'EOF'
+[Settings]
+gtk-theme-name=unify-dark
+gtk-icon-theme-name=Papirus-Dark
+gtk-font-name=Inter 10
+gtk-application-prefer-dark-theme=1
+gtk-cursor-theme-name=Adwaita
+EOF
+cat > /etc/gtk-3.0/settings.ini <<'EOF'
+[Settings]
+gtk-theme-name=unify-dark
+gtk-icon-theme-name=Papirus-Dark
+gtk-font-name=Inter 10
+gtk-application-prefer-dark-theme=1
+EOF
+
+echo "[unify] user session defaults"
+if [ -d /etc/skel/.config ]; then
+    install -d /home/unify/.config
+    cp -a /etc/skel/.config/. /home/unify/.config/
+    chown -R unify:unify /home/unify
+fi
+install -d /home/unify/Pictures /home/unify/Documents /home/unify/Downloads
+chown -R unify:unify /home/unify
+
+echo "[unify] desktop applications database"
+if command -v update-desktop-database >/dev/null 2>&1; then
+    update-desktop-database -q /usr/share/applications || true
+fi
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+    gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor 2>/dev/null || true
+fi

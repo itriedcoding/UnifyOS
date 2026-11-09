@@ -1,0 +1,31 @@
+#!/bin/sh
+# Capture the screen or a region with grim/slurp into ~/Pictures.
+set -eu
+
+directory="${XDG_PICTURES_DIR:-$HOME/Pictures}"
+mkdir -p "$directory"
+file="$directory/screenshot-$(date +%Y%m%d-%H%M%S).png"
+
+for tool in grim; do
+    command -v "$tool" >/dev/null 2>&1 || {
+        echo "unify-screenshot: $tool is not installed" >&2
+        exit 1
+    }
+done
+
+case "${1:-full}" in
+    region)
+        command -v slurp >/dev/null 2>&1 || { echo "unify-screenshot: slurp is not installed" >&2; exit 1; }
+        geometry="$(slurp)" || exit 1
+        grim -g "$geometry" "$file"
+        ;;
+    window)
+        grim -g "$(swaymsg -t get_tree 2>/dev/null | grep -o '"rect": {[^}]*}' | head -1)" "$file" 2>/dev/null \
+            || grim "$file"
+        ;;
+    *)
+        grim "$file"
+        ;;
+esac
+
+echo "$file"

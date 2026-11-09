@@ -1,0 +1,14 @@
+[package]
+name = "unify-ctl"
+description = "UnifyOS system control CLI (backend for Settings, Control Center and the panel)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "unify-ctl"
+path = "src/main.rs"
+
+[dependencies]
+unify-core = { path = "../unify-core" }

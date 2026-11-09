@@ -1,0 +1,21 @@
+#!/bin/bash
+# UnifyOS Minimal edition configuration: console system, no graphical session.
+set -euo pipefail
+export DEBIAN_FRONTEND=noninteractive
+
+echo "[unify] console default target"
+systemctl set-default multi-user.target >/dev/null 2>&1 || true
+
+cat > /etc/motd <<'EOF'
+
+  UnifyOS Minimal
+  ---------------
+  unify-ctl sysinfo      system overview
+  unify-pkg check        verify the package database
+  unify-installer        install UnifyOS to a disk
+  ufw status             firewall state
+
+EOF
+
+echo "[unify] serial console enabled"
+systemctl enable serial-getty@ttyS0.service >/dev/null 2>&1 || true

@@ -1,0 +1,113 @@
+#!/bin/bash
+# UnifyOS image configuration common to every edition. Executed inside the new
+# root filesystem by iso/bootstrap-rootfs.sh.
+set -euo pipefail
+export DEBIAN_FRONTEND=noninteractive
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+OVERLAY=/opt/unify/overlay
+
+echo "[unify] identity"
+echo unifyos > /etc/hostname
+cat > /etc/hosts <<'EOF'
+127.0.0.1 localhost unifyos
+::1 localhost ip6-localhost
+EOF
+
+echo "[unify] system binaries, themes and branding"
+install -d /usr/lib/unify /usr/share/unify /usr/share/backgrounds/unify /usr/share/themes /etc/unify /etc/skel
+if [ -d "$OVERLAY/bin" ]; then
+    for binary in "$OVERLAY"/bin/*; do
+        if [ -f "$binary" ] && [ -x "$binary" ]; then
+            install -m0755 "$binary" /usr/bin/
+        fi
+    done
+fi
+if [ -d "$OVERLAY/themes" ]; then
+    cp -a "$OVERLAY"/themes/. /usr/share/themes/
+fi
+if [ -d "$OVERLAY/wallpapers" ]; then
+    cp -a "$OVERLAY"/wallpapers/. /usr/share/backgrounds/unify/
+fi
+if [ -d "$OVERLAY/branding" ]; then
+    cp -a "$OVERLAY"/branding/. /usr/share/unify/
+fi
+if [ -d "$OVERLAY/installer" ]; then
+    cp -a "$OVERLAY"/installer/. /usr/lib/unify/installer/
+    install -m0755 /usr/lib/unify/installer/unify-installer-cli /usr/bin/unify-installer 2>/dev/null || true
+fi
+if [ -d "$OVERLAY/desktop/skel" ]; then
+    cp -a "$OVERLAY"/desktop/skel/. /etc/skel/
+fi
+
+echo "[unify] default configuration"
+cat > /etc/unify/unify.toml <<'EOF'
+# UnifyOS system defaults, read by unify-ctl and the desktop session.
+[desktop]
+theme = "unify-dark"
+accent = "#4c8dff"
+wallpaper = "/usr/share/backgrounds/unify/wallpaper-dark.svg"
+
+[panel]
+position = "top"
+height = 34
+
+[updates]
+channel = "stable"
+automatic-check = true
+EOF
+
+echo "[unify] services"
+if [ -d "$OVERLAY/units" ]; then
+    for unit in "$OVERLAY"/units/*.service; do
+        [ -f "$unit" ] && install -m0644 "$unit" /etc/systemd/system/
+    done
+fi
+systemctl enable unify-sysmond.service >/dev/null 2>&1 || true
+systemctl enable NetworkManager.service >/dev/null 2>&1 || true
+systemctl enable systemd-timesyncd.service >/dev/null 2>&1 || true
+systemctl enable apparmor.service >/dev/null 2>&1 || true
+
+echo "[unify] udev rules"
+if [ -d "$OVERLAY/udev" ]; then
+    install -d /usr/lib/udev/rules.d
+    for rule in "$OVERLAY"/udev/*.rules; do
+        [ -f "$rule" ] && install -m0644 "$rule" /usr/lib/udev/rules.d/
+    done
+fi
+
+echo "[unify] live session user"
+if ! id unify >/dev/null 2>&1; then
+    useradd -m -s /bin/bash -G sudo,video,audio,input,netdev,bluetooth,plugdev unify
+    passwd -d unify >/dev/null 2>&1 || true
+fi
+
+echo "[unify] firewall defaults: deny inbound, allow outbound"
+ufw --force default deny incoming >/dev/null 2>&1 || true
+ufw --force default allow outgoing >/dev/null 2>&1 || true
+ufw --force enable >/dev/null 2>&1 || true
+
+echo "[unify] kernel hardening"
+cat > /etc/sysctl.d/90-unify-hardening.conf <<'EOF'
+kernel.kptr_restrict = 1
+kernel.dmesg_restrict = 1
+kernel.yama.ptrace_scope = 1
+kernel.unprivileged_bpf_disabled = 1
+net.ipv4.conf.all.rp_filter = 1
+net.ipv4.tcp_syncookies = 1
+net.ipv6.conf.all.accept_redirects = 0
+EOF
+
+echo "[unify] boot splash"
+if command -v plymouth-set-default-theme >/dev/null 2>&1; then
+    plymouth-set-default-theme -R unify >/dev/null 2>&1 || true
+fi
+
+echo "[unify] initramfs"
+if command -v update-initramfs >/dev/null 2>&1; then
+    update-initramfs -u -k all
+fi
+
+echo "[unify] cleaning image"
+rm -rf /opt/unify/overlay
+apt-get clean
+rm -rf /var/lib/apt/lists/*

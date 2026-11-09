@@ -1,0 +1,33 @@
+#!/bin/sh
+# Unify Desktop session startup. labwc runs this once per session.
+
+export XDG_CURRENT_DESKTOP=Unify
+export XDG_SESSION_TYPE=wayland
+export GTK_THEME="${GTK_THEME:-unify-dark}"
+export MOZ_ENABLE_WAYLAND=1
+
+wallpaper=/usr/share/backgrounds/unify/wallpaper-dark.png
+if [ -f "$wallpaper" ]; then
+    swaybg -m fill -i "$wallpaper" &
+else
+    swaybg -c 0b0e14 &
+fi
+
+waybar >/dev/null 2>&1 &
+mako &
+kanshi >/dev/null 2>&1 &
+
+for portal in /usr/libexec/xdg-desktop-portal-wlr /usr/lib/xdg-desktop-portal-wlr; do
+    if [ -x "$portal" ]; then
+        "$portal" &
+        break
+    fi
+done
+
+# Keep the keyboard layout in sync with the system configuration.
+if command -v localectl >/dev/null 2>&1; then
+    layout="$(localectl status 2>/dev/null | sed -n 's/.*X11 Layout: *//p')"
+    if [ -n "$layout" ]; then
+        export XKB_DEFAULT_LAYOUT="$layout"
+    fi
+fi

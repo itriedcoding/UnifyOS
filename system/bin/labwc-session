@@ -1,0 +1,30 @@
+#!/bin/sh
+# Unify Desktop session launcher.
+#
+# Sets the Wayland/GTK environment and hands control to labwc, which reads the
+# session configuration from ~/.config/labwc (installed from /etc/skel).
+set -eu
+
+export XDG_CURRENT_DESKTOP=Unify
+export XDG_SESSION_TYPE=wayland
+export XDG_SESSION_DESKTOP=unify
+export GTK_THEME="${GTK_THEME:-unify-dark}"
+export QT_QPA_PLATFORM=wayland
+export MOZ_ENABLE_WAYLAND=1
+export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+
+mkdir -p "$XDG_RUNTIME_DIR" 2>/dev/null || true
+chmod 700 "$XDG_RUNTIME_DIR" 2>/dev/null || true
+
+if [ -f /etc/unify/session.env ]; then
+    # shellcheck disable=SC1091
+    . /etc/unify/session.env
+fi
+
+if ! command -v labwc >/dev/null 2>&1; then
+    echo "unify-session: labwc is not installed" >&2
+    exit 1
+fi
+
+exec labwc
