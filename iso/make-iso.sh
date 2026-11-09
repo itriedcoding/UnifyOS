@@ -163,15 +163,22 @@ fi
 
 # The BIOS image must target El Torito and carry its own search/config: a
 # plain i386-pc core image has no usable root here and drops to the grub>
-# prompt instead of loading the menu. Long lines are intentional: no
-# continuation characters to get lost in transport.
-BIOS_TARGET=i386-pc-eltorito
-if ! "$GRUB_MKSTANDALONE" -O "$BIOS_TARGET" --directory="$GRUB_LIB/i386-pc" --locales="" --fonts="" --output="$WORK/core.img" --modules="$GRUB_MODULES" "boot/grub/grub.cfg=$WORK/embed.cfg" 2>/dev/null; then
+# prompt. El Torito limits the core to 0x78000 bytes, so the BIOS set leaves
+# out the video and font modules the console-only menu never loads.
+BIOS_MODULES="part_gpt part_msdos iso9660 normal search search_label configfile echo test linux"
+BIOS_OK=0
+for variant in "--compress=xz" ""; do
+    if "$GRUB_MKSTANDALONE" -O i386-pc-eltorito --directory="$GRUB_LIB/i386-pc" --locales="" --fonts="" $variant --output="$WORK/core.img" --modules="$BIOS_MODULES" "boot/grub/grub.cfg=$WORK/embed.cfg" 2>/dev/null; then
+        BIOS_TARGET="i386-pc-eltorito${variant:+ xz}"; BIOS_OK=1; break
+    fi
+done
+if [ "$BIOS_OK" -ne 1 ]; then
     BIOS_TARGET=i386-pc
-    "$GRUB_MKSTANDALONE" -O "$BIOS_TARGET" --directory="$GRUB_LIB/i386-pc" --locales="" --fonts="" --output="$WORK/core.img" --modules="$GRUB_MODULES" "boot/grub/grub.cfg=$WORK/embed.cfg"
+    "$GRUB_MKSTANDALONE" -O i386-pc --directory="$GRUB_LIB/i386-pc" --locales="" --fonts="" --output="$WORK/core.img" --modules="$BIOS_MODULES" "boot/grub/grub.cfg=$WORK/embed.cfg"
 fi
-echo "      BIOS core image built for $BIOS_TARGET"
+echo "      BIOS core image: $BIOS_TARGET, $(wc -c < "$WORK/core.img") bytes"
 cat "$GRUB_LIB/i386-pc/cdboot.img" "$WORK/core.img" > "$WORK/isodir/boot/grub/eltorito.img"
+
 
 
 # Small FAT image that carries the UEFI loader; used as the El Torito EFI entry
