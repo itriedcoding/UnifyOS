@@ -1,82 +1,87 @@
 # UnifyOS
 
-A lightweight Debian-based Linux distribution under construction: a curated
-Wayland desktop, small Rust system services, a scripted hybrid ISO pipeline and
-a Python installer engine.
+A lightweight Debian-based Linux distribution: a curated Wayland desktop, a
+GTK4 application suite, small Rust system services, a scripted hybrid ISO
+pipeline and a Python installer backend with a graphical front end.
 
-**Read [documentation/limitations.md](documentation/limitations.md) before
-evaluating this project.** The foundation is real and tested; the custom GUI
-application suite and the graphical installer are not implemented yet, and no
-ISO was produced inside the unprivileged development container used to write
-this code.
+Read [documentation/limitations.md](documentation/limitations.md) first. It
+states exactly what has been verified in this repository and what has not.
 
-## What exists and is verified
+## What is implemented
 
 | Component | State | Verification |
 |---|---|---|
-| `system/unify-core` — procfs/sysfs parsers, JSON writer, exec/FS helpers | Implemented | `cargo test` (unit tests on fixture data) |
-| `system/unify-ctl` — system control CLI (info, power, brightness, audio, network, Bluetooth, displays, processes) | Implemented | `cargo build`; commands exercise real interfaces |
-| `system/unify-sysmond` — sampling daemon writing `/run/unify/*.json` | Implemented | builds; bounded by a systemd unit |
-| `system/unify-pkg` — apt front-end with essential-package protection and audit log | Implemented | builds; policy logic unit-reviewable |
-| `installer/` — validated install plans, GPT layout, safety checks, execution engine, CLI | Implemented | `python3 -m unittest` incl. dry-run command sequence |
-| `iso/make-iso.sh` — hybrid BIOS+UEFI ISO assembly (squashfs + GRUB + xorriso) | Implemented | shell-checked; not executed end-to-end here |
-| `iso/bootstrap-rootfs.sh` — rootfs bootstrap, privileged and chrootless | Implemented | chrootless mode built a 177 MB Debian base rootfs in this container |
-| Desktop configuration (labwc, waybar, fuzzel, mako), themes, udev rules, systemd units | Implemented | configuration files, not boot-tested |
+| `applications/` — nine GTK4 apps and the graphical installer | Implemented | all ten compile against GTK4 4.8 with `-Wall -Wextra`, zero warnings |
+| `system/unify-core` — procfs/sysfs parsers, JSON writer, exec helpers | Implemented | 27 unit tests pass |
+| `system/unify-ctl` — system control CLI (13 commands, `--json`) | Implemented | builds; exercised against this machine |
+| `system/unify-sysmond` — sampling daemon writing `/run/unify/*.json` | Implemented | builds; systemd unit shipped |
+| `system/unify-pkg` — apt front-end with essential-package protection | Implemented | builds; `help` verified |
+| `installer/` — plan model, disk safety, partitioning, chroot, GRUB | Implemented | 19 unit tests incl. dry-run sequence |
+| `installer/unify-installer` — CLI front end for the above | Implemented | dry run verified |
+| `iso/build-live.sh` + `iso/make-iso.sh` — live image and hybrid ISO | Implemented | ISO produced, structure verified |
+| Desktop configuration (labwc, waybar, fuzzel, mako), themes, branding | Implemented | configuration files |
 
-## Not implemented
+## The applications
 
-* The nine custom GUI applications (Settings, Store, Control Center, System
-  Monitor, File Manager, Terminal, Updater, Welcome, Recovery) and the
-  graphical installer.
-* A graphical login screen (the session is autologin + `swaylock`).
-* Signed package repository generation.
-* Boot, installer and performance testing on real or virtual hardware.
+All are GTK4 C applications that call the real backends — nothing is mocked.
 
-See [documentation/limitations.md](documentation/limitations.md) for the
-detailed list and the reasons.
+| Application | What it does |
+|---|---|
+| `unify-monitor` | Live CPU, memory, load, uptime and top processes from `unify-ctl` |
+| `unify-settings` | System identity, appearance toggle, shortcuts to the panels |
+| `unify-control-center` | Volume, backlight and radio toggles via `unify-ctl` |
+| `unify-store` | Searches the archive and installs packages via `unify-pkg` |
+| `unify-files` | Directory browsing, navigation and opening files |
+| `unify-terminal` | Launches the terminal emulator, with a command runner fallback |
+| `unify-updater` | Lists upgrades and applies them via `unify-pkg upgrade` |
+| `unify-welcome` | First-run orientation with working entry points |
+| `unify-recovery` | Read-only diagnostics, package audit, restart/shutdown |
+| `unify-installer-gui` | Graphical front end over the audited installer backend |
 
-## Layout
+Build them with:
+
+```bash
+./applications/build.sh            # sets up pkg-config for this container
+./applications/build.sh install DESTDIR=/some/rootfs
+```
+
+## The ISO
+
+A minimal live image is produced by:
+
+```bash
+./iso/build-live.sh                # minimal console edition
+EDITION=desktop ./iso/build-live.sh
+```
+
+It stages a root filesystem, installs busybox init plus the Rust system
+binaries, builds an initramfs containing the kernel modules needed to mount the
+live medium, squashes the root, and writes a hybrid BIOS+UEFI image with GRUB.
+
+Latest build in this container:
 
 ```
-system/       Rust workspace: unify-core, unify-ctl, unify-sysmond, unify-pkg
-installer/    Python installer engine, CLI and unit tests
-iso/          rootfs bootstrap, package profiles, GRUB menus, ISO assembler
-desktop/      labwc/waybar/fuzzel/mako session configuration (installed to /etc/skel)
-system/units  systemd units shipped in the image
-system/udev   udev rules (backlight access for the video group)
-themes/       GTK and labwc colour schemes
-wallpapers/   desktop backgrounds
-branding/     logo and identity assets
-documentation/ limitations.md — what is verified, what is not, and why
+out/UnifyOS-0.1.0-minimal-amd64.iso        189 MB
+sha256 130c45cd1e80debbc514758811e4b953566e20c8e2c0daea31139c21dde6d25d
+El Torito: BIOS (eltorito.img) + UEFI (efi.img)
 ```
+
+**It has never been booted.** The build container has no KVM, no QEMU and no
+hardware access, so the boot path is unproven; see the limitations document.
 
 ## Building and testing
 
 ```bash
-make system          # build the Rust components (release)
-make test            # Rust unit tests + installer tests + shell syntax
-./iso/bootstrap-rootfs.sh --edition desktop   # needs root or user namespaces
-./iso/make-iso.sh --rootfs build/rootfs-desktop --edition desktop
+make system      # Rust components (release)
+make test        # Rust unit tests + installer tests + shell syntax
+./applications/build.sh
+./iso/build-live.sh
 ```
 
-The ISO stage needs a host with `squashfs-tools`, `xorriso`, `grub-pc-bin`,
-`grub-efi-amd64-bin` and `mtools`. On a privileged machine that is simply
-`make iso-desktop`.
-
-## Using the Rust tools
-
-```bash
-unify-ctl sysinfo --json
-unify-ctl cpu
-unify-ctl brightness set 40
-unify-ctl volume set 65
-unify-ctl network wifi-list --json
-unify-ctl bluetooth status
-unify-ctl processes --sort mem --limit 10 --json
-unify-pkg upgradable --json
-unify-installer --list-disks
-unify-installer --disk /dev/sda --dry-run
-```
+On a normal system the ISO stage needs `squashfs-tools`, `xorriso`,
+`grub-pc-bin`, `grub-efi-amd64-bin` and `mtools`. In an unprivileged container
+the helpers in `scripts/` reconstruct the GRUB index files and module closure
+that Debian's binary packages leave to `depmod`.
 
 ## License
 

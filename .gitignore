@@ -33,3 +33,15 @@ compile_commands.json
 *.key
 *.gpg
 private/
+
+# Compiled GTK4 application binaries (build with applications/build.sh)
+/applications/unify-monitor
+/applications/unify-settings
+/applications/unify-control-center
+/applications/unify-store
+/applications/unify-files
+/applications/unify-terminal
+/applications/unify-updater
+/applications/unify-welcome
+/applications/unify-recovery
+/applications/unify-installer-gui

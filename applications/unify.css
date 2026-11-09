@@ -1,0 +1,39 @@
+/* UnifyOS application styling, layered on top of Adwaita. */
+
+.title-1 {
+    font-size: 22px;
+    font-weight: 700;
+}
+
+.title-4 {
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    opacity: 0.72;
+}
+
+.heading {
+    font-weight: 600;
+}
+
+.dim-label {
+    opacity: 0.66;
+}
+
+.caption {
+    font-size: 12px;
+}
+
+boxed-list {
+    background-color: alpha(currentColor, 0.05);
+    border-radius: 10px;
+}
+
+boxed-list > row:not(:last-child) {
+    border-bottom: 1px solid alpha(currentColor, 0.08);
+}
+
+button {
+    border-radius: 8px;
+}

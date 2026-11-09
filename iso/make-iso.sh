@@ -107,15 +107,14 @@ echo "      kernel $KERNEL_VERSION, initramfs ${INITRAMFS##*/}"
 
 echo "[2/6] building squashfs ($COMPRESSION)"
 case "$COMPRESSION" in
-    zstd) SQUASH_OPTIONS=(-comp zstd -Xcompression-level 15) ;;
+    zstd) SQUASH_OPTIONS=(-comp zstd -Xcompression-level "${SQUASH_LEVEL:-15}") ;;
     gzip) SQUASH_OPTIONS=(-comp gzip -Xcompression-level 9) ;;
     xz) SQUASH_OPTIONS=(-comp xz -Xbcj x86) ;;
     *) echo "error: unsupported compression '$COMPRESSION'" >&2; exit 1 ;;
 esac
 "$MKSQUASHFS" "$ROOTFS" "$WORK/isodir/live/filesystem.squashfs" \
     "${SQUASH_OPTIONS[@]}" -all-root -noappend -no-progress -wildcards \
-    -e boot/grub -e var/cache/apt/archives -e var/lib/apt/lists \
-    -e proc -e sys -e dev -e run -e tmp
+    -e boot/grub -e var/cache/apt/archives -e var/lib/apt/lists
 
 echo "[3/6] staging boot files"
 cp -- "$KERNEL" "$WORK/isodir/live/vmlinuz"
@@ -145,7 +144,8 @@ configfile (\$root)/boot/grub/grub.cfg
 EOF
 
 GRUB_MODULES="part_gpt part_msdos iso9660 fat normal search search_label configfile all_video gfxterm font echo test linux"
-"$GRUB_MKSTANDALONE" --format=x86_64-efi \
+"$GRUB_MKSTANDALONE" -O x86_64-efi --directory="$GRUB_LIB/x86_64-efi" \
+    --locales="" --fonts="" \
     --output="$WORK/isodir/EFI/BOOT/BOOTX64.EFI" \
     --modules="$GRUB_MODULES" \
     "boot/grub/grub.cfg=$WORK/embed.cfg"
@@ -158,7 +158,7 @@ cat "$GRUB_LIB/i386-pc/cdboot.img" "$WORK/core.img" > "$WORK/isodir/boot/grub/el
 # and as the hybrid GPT partition so the ISO also boots when dd'ed to a stick.
 EFI_IMAGE="$WORK/isodir/boot/grub/efi.img"
 dd if=/dev/zero of="$EFI_IMAGE" bs=1M count=8 status=none
-"$MFORMAT" -i "$EFI_IMAGE" -F ::
+"$MFORMAT" -i "$EFI_IMAGE" ::
 "$MMD" -i "$EFI_IMAGE" ::/EFI ::/EFI/BOOT
 "$MCOPY" -i "$EFI_IMAGE" "$WORK/isodir/EFI/BOOT/BOOTX64.EFI" ::/EFI/BOOT/BOOTX64.EFI
 

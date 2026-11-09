@@ -1,0 +1,11 @@
+# /etc/inittab for busybox init (UnifyOS live and minimal images).
+# Consoles: tty1 for local use, ttyS0 for headless/serial and automated testing.
+
+::sysinit:/etc/unify/rcS
+::respawn:-/bin/sh
+tty2::respawn:-/bin/sh
+tty3::respawn:-/bin/sh
+ttyS0::respawn:-/bin/sh
+
+::ctrlaltdel:/sbin/reboot
+::shutdown:/bin/umount -a -r

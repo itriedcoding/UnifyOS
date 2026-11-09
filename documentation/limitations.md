@@ -1,80 +1,75 @@
 # UnifyOS — limitations and status
 
-This document exists so nobody mistakes the current state for a finished
-distribution. It lists what is implemented, what is verified, and what is
-missing.
+This document records what is verified, what is not, and why. It is updated
+with every change; treat anything not listed as verified as untested.
 
-## Verified in the development container
+## Verified in this environment
 
-The container used to write this code is an unprivileged Ubuntu 24.04 sandbox
-(no `root`, no `sudo`, no `CAP_SYS_ADMIN`, 2 vCPUs, ~4 GB RAM, 16 GB disk).
+The build container is an unprivileged Linux sandbox (no `root`, no
+`CAP_SYS_ADMIN`, no `/dev/kvm`, no QEMU, 2 vCPUs, ~4 GB RAM).
 
 Verified by running the code:
 
-* `cargo test` in `system/` — unit tests for `/proc` and sysfs parsers, the JSON
-  writer, filesystem helpers and mount parsing pass.
-* `cargo build --release` for `unify-ctl`, `unify-sysmond`, `unify-pkg`.
-* `python3 -m unittest discover -s installer/tests -t installer` — plan
-  validation, GPT layout, partition naming, sgdisk/mkfs command generation,
-  fstab generation, disk-safety refusals and the dry-run installation sequence.
-* `bash -n` over every build script and hook.
-* `mmdebstrap --mode=chrootless` produced a real 177 MB Debian bookworm base
-  root filesystem (this is the mechanism `iso/bootstrap-rootfs.sh` uses for
-  unprivileged builds).
+* **Rust system layer** — `cargo test`: 27 unit tests covering `/proc` and sysfs
+  parsing, the JSON writer, mount parsing and filesystem helpers. All four
+  binaries build in release mode.
+* **Installer backend** — `python3 -m unittest`: 19 tests covering plan
+  validation, GPT layout, partition naming, command generation, fstab output,
+  disk-safety refusals and the complete dry-run command sequence.
+* **Application suite** — all ten GTK4 programs compile against GTK4 4.8 with
+  `-Wall -Wextra` and produce zero warnings.
+* **Live ISO** — `iso/build-live.sh` produced a 189 MB hybrid image; `xorriso`
+  reports both El Torito entries (BIOS `eltorito.img`, UEFI `efi.img`), the
+  squashfs is 168 MB with `-all-root` ownership normalisation, and a SHA256
+  checksum is written next to the image.
 
-## Not verified — and why
+## Not verified
 
-* **No ISO was assembled in this container.** `iso/make-iso.sh` is complete and
-  syntax-checked, but the desktop root filesystem it needs was not produced
-  here: the full desktop profile (~96 packages) fails partway through
-  `chrootless` package configuration because a handful of Debian maintainer
-  scripts (`python3.11-minimal`, `bluez`, `base-files`, `login`) write to
-  absolute paths and call `chown` to unmapped group IDs. The workaround used for
-  the base rootfs (a no-op `chown` shim plus `mksquashfs -all-root`) gets the
-  base system through, but not those postinst scripts. A privileged host, or a
-  user namespace with subordinate ID ranges (`newuidmap`), does not have this
-  problem and is what the scripts target.
-* **No boot test was performed.** The sandbox has no KVM, no `/dev/kvm`, no
-  QEMU system emulator and no hardware access. GRUB menu entries, the hybrid
-  El Torito layout and the squashfs/initramfs wiring are therefore unproven.
-* **The graphical applications do not exist.** Unify Settings, Unify Store,
-  Unify Control Center, Unify System Monitor, Unify File Manager, Unify
-  Terminal, Unify Updater, Unify Welcome and Unify Recovery are not implemented.
-  The backends they would use (`unify-ctl`, `unify-pkg`, `unify-sysmond`, the
-  installer engine) are implemented and tested, but shipping empty GTK windows
-  was explicitly rejected as fake functionality. The desktop image profile
-  therefore relies on real, lightweight substitutes (`foot`, `pcmanfm`,
-  `pavucontrol`, `firefox-esr`, `mousepad`, `evince`, `mpv`, `imv`) so that a
-  built image would still be usable.
-* **There is no graphical installer.** `installer/` provides a validated plan
-  model, real partitioning/formatting/mounting/rsync/chroot/GRUB logic and a
-  CLI, plus unit tests for the plan and dry-run behaviour. It has never been
-  run against a real disk (that needs root and a spare device). Manual
-  partitioning of arbitrary existing layouts is not supported; the plan model
-  creates the documented GPT layout only.
-* **No login screen.** The session is started by a systemd unit on tty1 for the
-  `unify` user; `swaylock` provides locking. A graphical greeter is not
-  implemented.
+* **The ISO has never been booted.** There is no virtual machine or hardware in
+  this container. GRUB menu entries, the initramfs module loading, the squashfs
+  switch_root and the busybox init flow are therefore unproven. Booting it under
+  UEFI and BIOS is the single most important next step.
+* **No application has been launched.** GTK4 applications need a display
+  server; this container has none. Compilation proves the code is well formed
+  and links against GTK4, not that the windows behave correctly.
+* **No desktop root filesystem was produced.** `iso/profiles/desktop.list`
+  selects the packages, but the full profile fails during unprivileged
+  `chrootless` configuration: several Debian maintainer scripts write to
+  absolute paths and `chown` to unmapped group IDs. The ISO builder therefore
+  supports `EDITION=desktop` but the desktop image cannot be produced without a
+  privileged host. The minimal image contains no GTK4 runtime libraries and no
+  desktop session, so it boots to a console only.
+* **The installer has never written to a disk.** It requires root and a spare
+  block device. Its plan generation, safety refusals and command sequence are
+  unit-tested and dry-run verified; partitioning, formatting and GRUB
+  installation are not.
+* **No graphical login screen.** The desktop session is autologin on tty1 with
+  `swaylock` for locking.
 * **No signed package repository.** `packages/` was scoped but not built.
-* **Performance targets are unmeasured.** The 150–300 MB RAM / 2–4 GB disk /
-  <10 s boot goals are engineering targets, not results. Nothing in this
-  repository has been benchmarked, and no numbers are claimed.
-* **Security hardening is configured, not audited.** The image hook enables
-  AppArmor, sets sysctl hardening, enables UFW with deny-incoming defaults and
-  keeps service exposure minimal, but no audit or penetration test was done.
+* **Performance targets are unmeasured.** 150–300 MB idle RAM, 2–4 GB installed
+  size and <10 s boot are goals, not results. No numbers are claimed.
+* **Security hardening is configured, not audited.** The image hooks enable
+  AppArmor, UFW and sysctl hardening; no audit or penetration test was done.
 
-## Consequences for evaluating the project
+## Known technical limitations
 
-Treat this as a working foundation and build system, not as a usable daily
-operating system. The next milestones, in order, are:
+* The minimal image's kernel modules are hard-linked from the Debian kernel
+  package; because `depmod` cannot run without root, the live root filesystem
+  has no `modules.dep`, so `modprobe` by name will not work inside it. The
+  initramfs carries an explicit, dependency-ordered module list instead.
+* `applications/build.sh` links with `-Wl,--allow-shlib-undefined` because the
+  extracted GTK4 sysroot has no linker scripts for cairo's private
+  dependencies. Symbols resolve at run time against the same libraries; this is
+  a build-environment workaround, not a code change.
+* `scripts/grub-lists.py` and `scripts/module-closure.py` exist only because
+  Debian ships GRUB index files and `modules.dep` as generated build output.
+  On a normal system `grub-mkrescue` and `depmod` replace them.
 
-1. Build the desktop rootfs on a privileged host (`make rootfs-desktop`), fix
-   any package-level issues it exposes, and boot it in QEMU/KVM with both UEFI
-   and BIOS firmware.
-2. Implement the Unify applications against the existing backends, starting
-   with Unify System Monitor (consumes `/run/unify/sysmon.json`) and Unify
-   Settings (consumes `unify-ctl`/`unify-pkg`).
-3. Add the graphical installer front end over `unify_installer` and run a full
-   install on a spare disk, then boot the installed system.
-4. Measure idle RAM, disk footprint and boot time on documented hardware and
-   publish the results.
+## Next steps, in order
+
+1. Boot the minimal ISO in QEMU with UEFI and BIOS firmware; fix whatever the
+   boot path exposes.
+2. Build the desktop root filesystem on a privileged host, integrate the GTK4
+   applications and their runtime libraries, and boot the desktop image.
+3. Run the graphical installer against a spare disk and boot the result.
+4. Measure idle memory, installed size and boot time on documented hardware.

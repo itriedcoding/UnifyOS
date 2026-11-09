@@ -1,0 +1,53 @@
+#!/bin/sh
+# UnifyOS live initramfs init.
+#
+# Locates the boot medium, loop-mounts live/filesystem.squashfs and hands over
+# to the real init inside the live root with switch_root.
+#
+# Runs under busybox ash; keep to POSIX sh and busybox applets only.
+
+export PATH=/bin:/sbin:/usr/bin:/usr/sbin
+
+fail() {
+    echo
+    echo "unify-live: $*"
+    echo "Dropping to a rescue shell. The medium is mounted at /media when possible."
+    exec /bin/sh
+}
+
+mount -t proc proc /proc || fail "cannot mount /proc"
+mount -t sysfs sysfs /sys || fail "cannot mount /sys"
+mount -t devtmpfs devtmpfs /dev 2>/dev/null || mdev -s
+
+mkdir -p /media /root /newroot
+
+# Modules are copied in at build time and listed in /modules.load, ordered so
+# that dependencies come first.
+if [ -f /modules.load ]; then
+    while read -r module; do
+        [ -n "$module" ] || continue
+        insmod "/$module" 2>/dev/null
+    done < /modules.load
+fi
+
+# The medium can be a CD/DVD (sr0) or any USB/virtio disk carrying the image.
+for device in /dev/sr0 /dev/cdrom /dev/vda /dev/sda /dev/sdb /dev/nvme0n1 /dev/mmcblk0; do
+    [ -b "$device" ] || continue
+    if mount -o ro "$device" /media 2>/dev/null; then
+        if [ -f /media/live/filesystem.squashfs ]; then
+            echo "unify-live: live medium found on $device"
+            break
+        fi
+        umount /media 2>/dev/null
+    fi
+done
+
+[ -f /media/live/filesystem.squashfs ] || fail "no live medium with live/filesystem.squashfs found"
+
+mount -t squashfs -o ro,loop /media/live/filesystem.squashfs /root \
+    || fail "cannot mount the live filesystem"
+
+[ -x /root/sbin/init ] || fail "live filesystem has no /sbin/init"
+
+# busybox switch_root moves /proc, /sys and /dev into the new root for us.
+exec switch_root /root /sbin/init

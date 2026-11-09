@@ -1,0 +1,32 @@
+#!/bin/sh
+# UnifyOS live/minimal early boot (run by busybox init before the shells start).
+
+export PATH=/bin:/sbin:/usr/bin:/usr/sbin
+
+mount -t proc proc /proc 2>/dev/null
+mount -t sysfs sysfs /sys 2>/dev/null
+mount -t devtmpfs devtmpfs /dev 2>/dev/null || /bin/mdev -s
+
+mkdir -p /dev/pts /dev/shm /run /tmp /var/tmp /var/lock /var/run
+mount -t devpts devpts /dev/pts 2>/dev/null
+mount -t tmpfs -o mode=1777 tmpfs /tmp 2>/dev/null
+mount -t tmpfs -o mode=1777 tmpfs /var/tmp 2>/dev/null
+mount -t tmpfs -o mode=0755 tmpfs /run 2>/dev/null
+mount -t tmpfs -o mode=1777 tmpfs /dev/shm 2>/dev/null
+ln -sf /run /var/run 2>/dev/null
+
+hostname unify 2>/dev/null
+
+# Loopback so local IPC services work; ignore failures on machines without it.
+ip link set lo up 2>/dev/null
+
+# Unify system binaries live in /usr/bin; give them a writable state directory.
+mkdir -p /run/unify
+if [ -x /usr/bin/unify-sysmond ]; then
+    /usr/bin/unify-sysmond --daemon 2>/dev/null &
+fi
+
+clear 2>/dev/null
+cat /etc/unify-release 2>/dev/null || echo "UnifyOS live"
+echo
+echo "Live session ready. Log in as root (no password) for a shell."
