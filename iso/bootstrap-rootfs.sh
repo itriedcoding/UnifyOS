@@ -25,6 +25,10 @@ MIRROR="${MIRROR:-http://deb.debian.org/debian}"
 SUITE="${SUITE:-bookworm}"
 ARCH="${ARCH:-amd64}"
 INSECURE="${INSECURE:-0}"
+# Path to a debian-archive-keyring.gpg to trust for the bootstrap. Non-Debian
+# hosts (for example Ubuntu runners) ship a keyring that is often too old to
+# verify the current archive, which makes apt reject every InRelease file.
+KEYRING="${KEYRING:-}"
 
 usage() {
     cat <<'EOF'
@@ -89,6 +93,11 @@ COMMON_ARGS=(
     "--aptopt=APT::Install-Recommends \"false\";"
     "--include=$INCLUDE"
 )
+
+if [ -n "$KEYRING" ]; then
+    [ -r "$KEYRING" ] || { echo "error: KEYRING is set but not readable: $KEYRING" >&2; exit 1; }
+    COMMON_ARGS+=("--keyring=$KEYRING")
+fi
 
 if [ "$MODE" = "root" ]; then
     if command -v mmdebstrap >/dev/null 2>&1; then

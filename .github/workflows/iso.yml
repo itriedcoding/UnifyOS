@@ -33,9 +33,31 @@ jobs:
             qemu-system-x86 ovmf seabios \
             python3
 
+      - name: Fetch a current Debian archive keyring
+        # The runner is Ubuntu, whose debian-archive-keyring can be older than
+        # the keys the Debian archive is signed with; without this, mmdebstrap
+        # rejects every InRelease with NO_PUBKEY. Install the real keyring
+        # rather than turning signature checking off.
+        run: |
+          set -euo pipefail
+          pool=https://deb.debian.org/debian/pool/main/d/debian-archive-keyring
+          listing="$(curl -fsSL "$pool/")"
+          # The [^"] classes keep each match inside one quoted filename.
+          pick() { printf '%s' "$listing" | grep -oE "$1" | sort -V | tail -1; }
+          file="$(pick 'debian-archive-keyring_[0-9][^"]*deb12u[0-9]+_all[.]deb' || true)"
+          if [ -z "$file" ]; then
+            file="$(pick 'debian-archive-keyring_[0-9][^"]*_all[.]deb' || true)"
+          fi
+          [ -n "$file" ] || { echo "error: no keyring package in pool listing" >&2; exit 1; }
+          echo "using $file"
+          curl -fsSL "$pool/$file" -o /tmp/debian-archive-keyring.deb
+          dpkg-deb -x /tmp/debian-archive-keyring.deb /tmp/debian-keyring
+          test -r /tmp/debian-keyring/usr/share/keyrings/debian-archive-keyring.gpg
+          echo "KEYRING=/tmp/debian-keyring/usr/share/keyrings/debian-archive-keyring.gpg" >> "$GITHUB_ENV"
+
       - name: Bootstrap the minimal root filesystem
         run: |
-          sudo ./iso/bootstrap-rootfs.sh --edition minimal --target build/rootfs-minimal
+          sudo env KEYRING="$KEYRING" ./iso/bootstrap-rootfs.sh --edition minimal --target build/rootfs-minimal
 
       - name: Build the live ISO
         run: |
