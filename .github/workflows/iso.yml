@@ -59,6 +59,11 @@ jobs:
         run: |
           sudo env KEYRING="$KEYRING" ./iso/bootstrap-rootfs.sh --edition minimal --target build/rootfs-minimal
 
+      - name: Hand the build tree back to the runner
+        # The bootstrap runs as root, so build/rootfs-minimal is root-owned and
+        # the unprivileged build step cannot create directories beside it.
+        run: sudo chown -R "$(id -u):$(id -g)" build
+
       - name: Build the live ISO
         run: |
           chmod +x iso/*.sh scripts/*.sh
