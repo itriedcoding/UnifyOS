@@ -41,19 +41,21 @@ fail() {
 
 mount -t proc proc /proc || fail "cannot mount /proc"
 mount -t sysfs sysfs /sys || fail "cannot mount /sys"
+# mdev only when devtmpfs is unavailable: devtmpfs creates the nodes itself, and
+# mdev would rewrite their modes on the shared devtmpfs instance.
 mount -t devtmpfs devtmpfs /dev 2>/dev/null || mdev -s 2>/dev/null || true
 [ -c /dev/console ] || mknod /dev/console c 5 1 2>/dev/null || true
 
 mkdir -p /media /root /newroot
 
 # Modules are copied in at build time and listed in /modules.load, ordered so
-# that dependencies come first.
+# that dependencies come first. Nodes for the devices they register appear
+# through devtmpfs without further help.
 if [ -f /modules.load ]; then
     while read -r module; do
         [ -n "$module" ] || continue
         insmod "/$module" 2>/dev/null || echo "unify-live: module did not load: $module"
     done < /modules.load
-    mdev -s 2>/dev/null || true
 fi
 
 # Any optical or disk device can carry the image: IDE/SATA (sr0), the Hyper-V
