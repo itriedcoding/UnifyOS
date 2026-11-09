@@ -92,7 +92,17 @@ fi
 echo "[2/6] staging live root filesystem from $BASE_ROOTFS"
 rm -rf "$WORK"
 mkdir -p "$WORK/root" "$WORK/initramfs"
-cp -a "$BASE_ROOTFS"/. "$WORK/root/"
+# Device nodes and virtual filesystems in the base image cannot be recreated
+# without privileges, and the live system mounts its own, so they are left out
+# and recreated empty just below.
+if command -v rsync >/dev/null 2>&1; then
+    rsync -a --exclude=/dev/* --exclude=/proc/* --exclude=/sys/* --exclude=/run/* \
+        "$BASE_ROOTFS"/ "$WORK/root"/
+else
+    ( cd "$BASE_ROOTFS" && tar -cf - \
+        --exclude=./dev --exclude=./proc --exclude=./sys --exclude=./run . ) \
+        | ( cd "$WORK/root" && tar -xpf - )
+fi
 mkdir -p "$WORK/root"/{proc,sys,dev,run,tmp,var/tmp,var/log,mnt,media,boot/grub,etc/unify}
 install -m644 "$KERNEL" "$WORK/root/boot/vmlinuz-$KVER"
 
