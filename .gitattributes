@@ -1,0 +1,11 @@
+# Keep the tree usable from Windows checkouts: sources and scripts are LF.
+* text=auto
+*.sh text eol=lf
+*.c text eol=lf
+*.h text eol=lf
+*.py text eol=lf
+*.rs text eol=lf
+Makefile text eol=lf
+*.chroot text eol=lf
+*.cfg text eol=lf
+*.list text eol=lf

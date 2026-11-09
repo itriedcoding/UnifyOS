@@ -65,3 +65,6 @@ checksums:
 clean:
 	rm -rf build/rootfs-desktop build/rootfs-minimal build/iso-desktop build/iso-minimal \
 	       system/target $(OUT)
+
+boot-test:
+	./scripts/qemu-boot-test.sh out/UnifyOS-0.1.0-minimal-amd64.iso

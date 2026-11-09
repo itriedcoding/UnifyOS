@@ -65,6 +65,23 @@ Verified by running the code:
   Debian ships GRUB index files and `modules.dep` as generated build output.
   On a normal system `grub-mkrescue` and `depmod` replace them.
 
+## Boot testing
+
+`scripts/qemu-boot-test.sh` boots an image under SeaBIOS and OVMF and exits
+non-zero unless the serial console reaches the live session. It has **not been
+run**: the environment this project was assembled in had no virtual machine, and
+the machine currently available is Windows without WSL, QEMU or a Linux
+toolchain. The ISO artifact was not retained there either, so it must be rebuilt
+with `./iso/build-live.sh` on a Linux host before the harness can run.
+
+## Known portability requirements
+
+* The installer requires Python 3.9 or newer: it uses `zoneinfo` for timezone
+  validation. Debian 12 ships 3.11, so the image is unaffected; a Windows
+  Python 3.8 cannot import it.
+* The Rust system layer reads `/proc` and `/sys` and is Linux-only by design.
+* The GTK4 applications need `libgtk-4-1` and a display server at run time.
+
 ## Next steps, in order
 
 1. Boot the minimal ISO in QEMU with UEFI and BIOS firmware; fix whatever the
