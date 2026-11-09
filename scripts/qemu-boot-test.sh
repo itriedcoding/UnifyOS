@@ -23,7 +23,7 @@ MEMORY="${QEMU_MEMORY:-1024}"
 TIMEOUT="${BOOT_TIMEOUT:-240}"
 LOGDIR="$ROOT/build/boottest"
 ACCEL="-accel tcg"
-[ -w /dev/kvm ] && ACCEL="-accel kvm"
+if [ -w /dev/kvm ]; then ACCEL="-accel kvm"; fi
 
 if [ -z "$ISO" ] || [ ! -f "$ISO" ]; then
     echo "usage: $0 path/to/image.iso" >&2
